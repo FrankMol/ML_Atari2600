@@ -18,7 +18,7 @@ ACTIONS_SIZE = 4
 
 actions = env.action_space
 print(actions.n)
-agent = AtariAgent(env, "test_model_new_2")
+agent = AtariAgent(env, "test_model_supercomputer")
 
-# agent.train(env)
-agent.test(env)
+agent.train(env)
+# agent.test(env)
