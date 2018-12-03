@@ -247,9 +247,9 @@ class AtariAgent:
         while True:
             action = self.choose_best_action(self.model, state, env.action_space)
             frame, reward, is_done, info = env.step(action+1)
-            if start_life > info['ale.lives']:
-                start_life = info['ale.lives']
-                frame, reward, is_done, info = env.step(1)
+            # if start_life > info['ale.lives']:
+            #     start_life = info['ale.lives']
+            #     frame, reward, is_done, info = env.step(1)
             env.render()
             time.sleep(0.1)
             frame = preprocess(frame)
