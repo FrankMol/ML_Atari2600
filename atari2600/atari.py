@@ -18,7 +18,7 @@ ACTIONS_SIZE = 4
 
 actions = env.action_space
 print(actions.n)
-agent = AtariAgent(env, "test_model_supercomputer")
+agent = AtariAgent(env, "test_model_gcloud")
 
 agent.train(env)
 # agent.test(env)

@@ -161,6 +161,7 @@ class AtariAgent:
         memory = deque(maxlen=1000000)
 
         # first fill memory
+        print("Initializing memory with {} states...".format(OBSERVE_ITERATIONS))
         for iteration in range(OBSERVE_ITERATIONS):
             # Choose epsilon based on the iteration
             epsilon = self.get_epsilon_for_iteration(START_ITERATION)
@@ -181,6 +182,7 @@ class AtariAgent:
             if is_done:
                 env.reset()
             state = next_state
+        print("Memory initialized, starting training")
 
         score = 0
         max_score = 0
