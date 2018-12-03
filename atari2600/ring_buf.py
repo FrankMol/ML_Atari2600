@@ -1,3 +1,5 @@
+import random
+
 class RingBuf:
     def __init__(self, size):
         # Pro-tip: when implementing a ring buffer, always allocate one extra element,
@@ -15,6 +17,19 @@ class RingBuf:
         # too many element. Remove the first element by incrementing start.
         if self.end == self.start:
             self.start = (self.start + 1) % len(self.data)
+
+    def add(self, state, action, new_frame, reward, is_done):
+        element = (state, action, new_frame, reward, is_done)
+        self.append(element)
+
+    def sample_batch(self, size):
+        samples = []
+        for i in range(size):
+            samples.append(self.__getitem__(random.randint(self.start, self.__len__())))
+        return samples
+
+    def get_random(self):
+        return self.__getitem__(random.randint(0, self.__len__()))
         
     def __getitem__(self, idx):
         return self.data[(self.start + idx) % len(self.data)]

@@ -1,4 +1,4 @@
-def fit_batch(model, gamma, start_states, actions, rewards, next_states, is_terminal)
+def fit_batch(model, gamma, start_states, actions, rewards, next_states, is_terminal):
     """Do one deep Q learning iteration.
     
     Params:

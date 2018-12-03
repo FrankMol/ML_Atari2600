@@ -1,24 +1,24 @@
 # Import the gym module
 import gym
-import sys
-import time
-from atari_preprocessing import preprocess
-
-# Create a breakout environment
+# make env before importing tensorflow, otherwise it will not load for some reason
 env = gym.make('BreakoutDeterministic-v4')
-# Reset it, returns the starting frame
-frame = env.reset()
-# Render
-env.render()
 
-is_done = False
-while True:
-    # Perform random action, return new frame, reward and whether game is over
-    frame, reward, is_done, _ = env.step(env.action_space.sample())
-    if is_done:
-        env.reset()
-    # Render
-    frame = preprocess(frame)
-    time.sleep(0.1)
-    env.render()
-env.close()
+import random
+from atari_agent import AtariAgent
+from atari_preprocessing import preprocess
+import numpy as np
+import os
+from collections import deque
+
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
+ATARI_SHAPE = (4, 105, 80)
+BATCH_SIZE = 32
+ACTIONS_SIZE = 4
+
+actions = env.action_space
+print(actions.n)
+agent = AtariAgent(env, "test_model_new_2")
+
+# agent.train(env)
+agent.test(env)
