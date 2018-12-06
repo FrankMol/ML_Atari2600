@@ -12,13 +12,9 @@ from collections import deque
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-ATARI_SHAPE = (4, 105, 80)
-BATCH_SIZE = 32
-ACTIONS_SIZE = 4
-
 actions = env.action_space
-print(actions.n)
-agent = AtariAgent(env, "test_model_gcloud")
+agent = AtariAgent(env)
 
-agent.train(env)
+
+# agent.train(env)
 # agent.test(env)
