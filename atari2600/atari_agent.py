@@ -7,32 +7,21 @@ import os
 import os.path
 import json
 from tensorflow import flags
-from collections import deque
 from datetime import datetime
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 ATARI_SHAPE = (105, 80, 4) # tensorflow backend -> channels last
 FLAGS = flags.FLAGS
 MODELS_PATH = 'trained_models/'
+new_model_name = "new_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
 
-new_model_name = "new_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S") + ".h5"
-
-# define hyperparameters -> these can all be passed ass command line arguments!
-flags.DEFINE_integer('batch_size', 32, "mini batch size")
-flags.DEFINE_integer('memory_size', 1000000, "max number of stored states from which batch is sampled")
-flags.DEFINE_integer('memory_start_size', 50000, "number of states with which the memory is initialized")
-flags.DEFINE_integer('agent_history', 4, "number of frames in each state")
+# define hyperparameters -> these can all be passed as command line arguments!
 flags.DEFINE_float('discount_factor', 0.99, "discount factor used in q-learning")
-flags.DEFINE_integer('update_frequency', 4, "number of actions played by agent between each q-iteration")
 flags.DEFINE_float('learning_rate', 0.00025, "learning rate used by CNN")
 flags.DEFINE_float('gradient_momentum', 0.95, "gradient momentum used by CNN")
 flags.DEFINE_float('sq_gradient_momentum', 0.95, "squared gradient momentum used by CNN")
 flags.DEFINE_float('min_sq_gradient', 0.01, "constant added to squared gradient")
-flags.DEFINE_float('initial_epsilon', 1, "initial value of epsilon used for exploration of state space")
-flags.DEFINE_float('final_epsilon', 0.1, "final value of epsilon used for exploration of state space")
-flags.DEFINE_integer('final_exploration_frame', 1000000,
-                   "frame at which final exploration reached") # LET OP: frame of q-iteration?
-flags.DEFINE_integer('no_op_max', 30, "max number of do nothing actions at beginning of episode")
+
 flags.DEFINE_string('model_name', new_model_name, "file name to which model will be saved")
 flags.DEFINE_string('load_model', '', "load model specificed by string")
 
@@ -43,21 +32,39 @@ class AtariAgent:
         if FLAGS.load_model == '':
             self.model_name = FLAGS.model_name
             self.build_model()
+            self.model.save(os.path.join(MODELS_PATH, self.model_name+'.h5'))
+            self.write_parameters(os.path.join(MODELS_PATH, self.model_name+'.json'))
             print("Created new model '{}'".format(FLAGS.model_name))
         else:
-            if os.path.exists(FLAGS.model_name):
-                self.model = keras.models.load_model(FLAGS.model_name)
-                self.model_name = FLAGS.model_name
-                print("Loaded model "+FLAGS.model_name)
+            if os.path.exists(os.path.join(MODELS_PATH, FLAGS.load_model+'.h5')):
+                self.model = keras.models.load_model(os.path.join(MODELS_PATH, FLAGS.load_model+'.h5'))
+                self.model_name = FLAGS.load_model
+                # FLAGS.read_flags_from_files(MODELS_PATH, self.model_name+'.json')
+                self.load_parameters(os.path.join(MODELS_PATH, self.model_name+'.json'))
+                print("Loaded model "+self.model_name)
             else:
                 print("Model with name {} could not be found".format(FLAGS.model_name))
                 exit(1)
 
+    def write_parameters(self, config_file):
+        items = FLAGS.flag_values_dict()
+        with open(config_file, 'w') as f:
+            json.dump(items, f, indent=4)
+    #
     def load_parameters(self, config_file):
         with open(config_file, 'r') as f:
             config = json.load(f)
-            for name, value in config.items():
-                FLAGS.__flags[name].value = value
+            for key, value in config.items():
+                setattr(FLAGS, key, value)
+
+    def write_iteration(self, config_file, iteration):
+        with open(config_file, "r") as f:
+            items = json.load(f)
+
+        items["iteration"] = iteration
+
+        with open(config_file, "w+") as f:
+            f.write(json.dumps(items, indent=4))
 
     def build_model(self):
         # from keras import backend as K
@@ -135,10 +142,6 @@ class AtariAgent:
             nb_epoch=1, batch_size=len(start_states), verbose=0
         )
 
-    # def choose_best_action(self, model, state):
-    #     mask = np.ones(self.n_actions).reshape(1, self.n_actions)
-    #     q_values = model.predict([state, mask])
-    #     return np.argmax(q_values)
 
     def choose_action(self, state, epsilon):
 
@@ -150,110 +153,7 @@ class AtariAgent:
             action = np.argmax(q_values)
         return action
 
-    def save_model_to_file(self):
-        self.model.save(os.path.join(MODELS_PATH,self.model_name))
+    def save_model_to_file(self, iteration):
+        self.model.save(os.path.join(MODELS_PATH, self.model_name+'.h5'))
+        self.write_iteration(os.path.join(MODELS_PATH, self.model_name+'.json'), iteration)
 
-    # def get_epsilon_for_iteration(self, iteration):
-    #     epsilon = max(FLAGS.final_epsilon, FLAGS.initial_epsilon - (FLAGS.initial_epsilon - FLAGS.final_epsilon)
-    #                   / FLAGS.final_exploration_frame*iteration)
-    #     return epsilon
-
-    # def train(self, env):
-    #     # reset environment
-    #     env.reset()
-    #     # get initial state
-    #     frame = env.reset()
-    #     frame = preprocess(frame)
-    #     state = np.stack((frame, frame, frame, frame), axis=2)
-    #     state = np.reshape([state], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
-    #
-    #     # initialize memory
-    #     memory = deque(maxlen=FLAGS.memory_size)
-    #
-    #     # first fill memory
-    #     print("Initializing memory with {} states...".format(FLAGS.memory_start_size))
-    #     for iteration in range(FLAGS.memory_start_size):
-    #         # Choose epsilon based on the iteration
-    #         epsilon = self.get_epsilon_for_iteration(START_ITERATION)
-    #
-    #         # Choose the action
-    #         if random.random() < epsilon:
-    #             action = env.action_space.sample()
-    #         else:
-    #             action = self.choose_best_action(self.model, state)
-    #
-    #         real_action=action+1
-    #         frame, reward, is_done, _ = env.step(real_action)
-    #         frame = preprocess(frame)
-    #         frame = np.reshape([frame], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], 1))
-    #         next_state = np.append(frame, state[:, :, :, :3], axis=3)
-    #         memory.append((state, action, reward, next_state, is_done))
-    #
-    #         if is_done:
-    #             env.reset()
-    #         state = next_state
-    #     print("Memory initialized, starting training")
-    #
-    #     score = 0
-    #     max_score = 0
-    #     # start training
-    #     for iteration in range(START_ITERATION, MAX_ITERATIONS):
-    #
-    #         # Choose epsilon based on the iteration
-    #         epsilon = self.get_epsilon_for_iteration(iteration)
-    #
-    #         # Choose the action
-    #         if random.random() < epsilon:
-    #             action = random.randrange(ACTIONS_SIZE) # add 1 because this because both 0 and 1 -> do nothing
-    #         else:
-    #             action = self.choose_best_action(self.model, state, env.action_space)
-    #         real_action = action + 1
-    #
-    #         # Play one game iteration (note: according to the next paper, you should actually play 4 times here)
-    #         frame, reward, is_done, _ = env.step(real_action)
-    #         frame = preprocess(frame)
-    #         frame = np.reshape([frame], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], 1))
-    #         next_state = np.append(frame, state[:, :, :, :3], axis=3)
-    #
-    #         memory.append((state, action, reward, next_state, is_done))
-    #
-    #         score += reward
-    #         if is_done:
-    #             env.reset()
-    #             max_score = max(max_score, score)
-    #             score = 0
-    #
-    #         # Sample and fit
-    #         batch = random.sample(memory, FLAGS.batch_size)
-    #         # unpack batch
-    #
-    #         self.fit_batch(batch)
-    #
-    #         if iteration % 500 ==0:
-    #             print("iteration: {}, max score = {}".format(iteration,max_score))
-    #             max_score = 0
-    #
-    #         if iteration % 1000 == 0:
-    #             self.model.save("trained_models/{}.h5".format(self.model_name))
-    #
-    #         state = next_state
-    #     env.close()
-
-    def test(self, env):
-        frame = env.reset()
-        env.step(1)
-        frame = preprocess(frame)
-        state = np.stack((frame, frame, frame, frame), axis=2)
-        state = np.reshape([state], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
-        env.render()
-        while True:
-            action = self.choose_best_action(self.model, state)
-            frame, reward, is_done, info = env.step(action+1)
-            env.render()
-            time.sleep(0.1)
-            frame = preprocess(frame)
-            frame = np.reshape([frame], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], 1))
-            state = np.append(frame, state[:, :, :, :3], axis=3)
-            if is_done:
-                env.reset()
-        env.close()
