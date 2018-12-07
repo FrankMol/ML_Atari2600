@@ -1,61 +1,57 @@
 import keras
 import numpy as np
-import time
 import random
-from atari_preprocessing import preprocess
 import os
 import os.path
 import json
 from tensorflow import flags
 from datetime import datetime
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
 ATARI_SHAPE = (105, 80, 4) # tensorflow backend -> channels last
 FLAGS = flags.FLAGS
-MODELS_PATH = 'trained_models/'
-new_model_name = "new_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
+MODEL_PATH = 'trained_models/'
+default_model_name = "untitled_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
 
-# define hyperparameters -> these can all be passed as command line arguments!
+# define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_float('discount_factor', 0.99, "discount factor used in q-learning")
 flags.DEFINE_float('learning_rate', 0.00025, "learning rate used by CNN")
 flags.DEFINE_float('gradient_momentum', 0.95, "gradient momentum used by CNN")
 flags.DEFINE_float('sq_gradient_momentum', 0.95, "squared gradient momentum used by CNN")
 flags.DEFINE_float('min_sq_gradient', 0.01, "constant added to squared gradient")
 
-flags.DEFINE_string('model_name', new_model_name, "file name to which model will be saved")
-flags.DEFINE_string('load_model', '', "load model specificed by string")
 
 class AtariAgent:
 
-    def __init__(self, env):
+    def __init__(self, env, model_name=default_model_name):
         self.n_actions = env.action_space.n
-        if FLAGS.load_model == '':
-            self.model_name = FLAGS.model_name
-            self.build_model()
-            self.model.save(os.path.join(MODELS_PATH, self.model_name+'.h5'))
-            self.write_parameters(os.path.join(MODELS_PATH, self.model_name+'.json'))
-            print("Created new model '{}'".format(FLAGS.model_name))
+        # self.model_name = model_name
+        self.model_file_name = os.path.join(MODEL_PATH, model_name) + '.h5'
+        self.config_file_name = os.path.join(MODEL_PATH, model_name) + '.json'
+        if os.path.exists(self.model_file_name):
+            # load model and parameters
+            self.model = keras.models.load_model(self.model_file_name)
+            self.load_parameters(self.config_file_name)
+            print("\nLoaded model '{}'".format(model_name))
         else:
-            if os.path.exists(os.path.join(MODELS_PATH, FLAGS.load_model+'.h5')):
-                self.model = keras.models.load_model(os.path.join(MODELS_PATH, FLAGS.load_model+'.h5'))
-                self.model_name = FLAGS.load_model
-                # FLAGS.read_flags_from_files(MODELS_PATH, self.model_name+'.json')
-                self.load_parameters(os.path.join(MODELS_PATH, self.model_name+'.json'))
-                print("Loaded model "+self.model_name)
-            else:
-                print("Model with name {} could not be found".format(FLAGS.model_name))
-                exit(1)
+            # make new model
+            self.build_model()
+            self.model.save(self.model_file_name)
+            self.write_parameters(self.config_file_name)
+            print("\nCreated new model with name '{}'".format(model_name))
 
     def write_parameters(self, config_file):
         items = FLAGS.flag_values_dict()
         with open(config_file, 'w') as f:
             json.dump(items, f, indent=4)
-    #
+
     def load_parameters(self, config_file):
         with open(config_file, 'r') as f:
             config = json.load(f)
             for key, value in config.items():
-                setattr(FLAGS, key, value)
+                if hasattr(FLAGS, key):
+                    setattr(FLAGS, key, value)
 
     def write_iteration(self, config_file, iteration):
         with open(config_file, "r") as f:
@@ -128,23 +124,21 @@ class AtariAgent:
 
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
-        next_Q_values = self.model.predict([next_states, actions_mask])
+        next_q_values = self.model.predict([next_states, actions_mask])
         # next_Q_values = model.predict([next_states, np.expand_dims(np.ones(actions.shape), axis=0)])
         # The Q values of the terminal states is 0 by definition, so override them
-        next_Q_values[is_terminal] = 0
+        next_q_values[is_terminal] = 0
         # The Q values of each start state is the reward + gamma * the max next state Q
-        Q_values = rewards + FLAGS.discount_factor * np.max(next_Q_values, axis=1)
+        q_values = rewards + FLAGS.discount_factor * np.max(next_q_values, axis=1)
         # Fit the keras model. Note how we are passing the actions as the mask and multiplying
         # the targets by the actions.
         one_hot_actions = self.get_one_hot(actions)
         self.model.fit(
-            [start_states, one_hot_actions], one_hot_actions * Q_values[:, None],
-            nb_epoch=1, batch_size=len(start_states), verbose=0
+            [start_states, one_hot_actions], one_hot_actions * q_values[:, None],
+            epochs=1, batch_size=len(start_states), verbose=0
         )
 
-
     def choose_action(self, state, epsilon):
-
         if random.random() < epsilon:
             action = random.randrange(self.n_actions)
         else:
@@ -154,6 +148,6 @@ class AtariAgent:
         return action
 
     def save_model_to_file(self, iteration):
-        self.model.save(os.path.join(MODELS_PATH, self.model_name+'.h5'))
-        self.write_iteration(os.path.join(MODELS_PATH, self.model_name+'.json'), iteration)
+        self.model.save(self.model_file_name)
+        self.write_iteration(self.config_file_name, iteration)
 
