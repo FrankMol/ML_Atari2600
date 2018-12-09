@@ -21,7 +21,7 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 default_model_name = "untitled_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
 ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
-NO_OP_ACTION = 1
+NO_OP_ACTION = 0
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
