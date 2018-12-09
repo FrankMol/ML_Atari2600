@@ -1,7 +1,7 @@
 # Import the gym module
 import gym
 # make env before importing tensorflow, otherwise it will not load for some reason
-env = gym.make('BreakoutDeterministic-v4')
+env_test = gym.make('BreakoutDeterministic-v4')
 
 from atari_agent import AtariAgent
 from atari_preprocessing import preprocess
@@ -9,13 +9,12 @@ import numpy as np
 import os
 import sys
 import time
-from tensorflow import flags
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
-ATARI_SHAPE = (105, 80, 4)  # tensorflow backend -> channels last
-FLAGS = flags.FLAGS
-
-flags.DEFINE_string('model_path', 'trained_models/', "default folder for storing model files")
+ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
+# FLAGS = flags.FLAGS
+MODEL_PATH = 'trained_models/'
+MAX_STEPS = 1000
 
 
 def update_state(state, frame):
@@ -25,10 +24,39 @@ def update_state(state, frame):
     return next_state
 
 
+# reset environment and get first state
+def get_start_state(env):
+    frame = env.reset()
+    frame = preprocess(frame)
+    state = np.stack((frame, frame, frame, frame), axis=2)
+    state = np.reshape([state], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
+    return state
+
+
+def play_episode(env, agent):
+    score = 0
+    is_done = 0
+    steps = 0
+    state = get_start_state(env)
+    while not is_done:
+        frame, reward, is_done, _ = env.step(agent.choose_action(state, 0))
+        state = update_state(state, frame)
+        score += reward
+        steps += 1
+        # no points in large no of steps means agent only plays no-op. Stop testing
+        if steps > 1000 and score == 0:
+            break
+    if is_done:
+        return score
+    else:
+        return -1
+
+
 def main(argv):
 
-    # make agent
-    if len(argv) > 1 and os.path.exists(os.path.join(FLAGS.model_path, argv[1]) + '.h5'):
+    env = env_test
+    # check if model exists and load model
+    if len(argv) > 1:
         agent = AtariAgent(env, argv[1])
     else:
         agent = None
@@ -36,34 +64,26 @@ def main(argv):
         exit(1)
 
     # get initial state
-    frame = env.reset()
-    frame = preprocess(frame)
-    state = np.stack((frame, frame, frame, frame), axis=2)
-    state = np.reshape([state], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
+    state = get_start_state(env)
 
-    printed_score = False
-    score = 0
-    steps = 0
+    # play single episode to get score
+    score = play_episode(env, agent)
+    if score == -1:
+        print("Agent did not finish episode within {} steps".format(MAX_STEPS))
+        return
+    else:
+        print("Agent performance: {}".format(int(score)))
+
     try:
         while True:
             frame, reward, is_done, _ = env.step(agent.choose_action(state, 0))
             env.render()
             state = update_state(state, frame)
-            score += reward
 
             if is_done:
                 env.reset()
                 env.render()
-                if not printed_score:
-                    print("Score: {}".format(score))
-                    printed_score = True
 
-            if not printed_score:
-                steps += 1
-
-            if steps > 1000:
-                print("Model could not complete single episode")
-                break
             time.sleep(0.1)
 
     except KeyboardInterrupt:

@@ -5,14 +5,12 @@ import os
 import os.path
 import json
 from tensorflow import flags
-from datetime import datetime
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-ATARI_SHAPE = (105, 80, 4) # tensorflow backend -> channels last
+ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
-default_model_name = "untitled_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_float('discount_factor', 0.99, "discount factor used in q-learning")
@@ -24,22 +22,19 @@ flags.DEFINE_float('min_sq_gradient', 0.01, "constant added to squared gradient"
 
 class AtariAgent:
 
-    def __init__(self, env, model_name=default_model_name):
+    def __init__(self, env, model_id):
         self.n_actions = env.action_space.n
-        # self.model_name = model_name
-        self.model_file_name = os.path.join(MODEL_PATH, model_name) + '.h5'
-        self.config_file_name = os.path.join(MODEL_PATH, model_name) + '.json'
-        if os.path.exists(self.model_file_name):
+        self.model_name = os.path.join(MODEL_PATH, model_id)
+        if os.path.exists(self.model_name + '.h5'):
             # load model and parameters
-            self.model = keras.models.load_model(self.model_file_name)
-            self.load_parameters(self.config_file_name)
-            print("\nLoaded model '{}'".format(model_name))
+            self.model = keras.models.load_model(self.model_name + '.h5')
+            self.load_parameters(self.model_name + '.json')
+            print("\nLoaded model '{}'".format(model_id))
         else:
             # make new model
             self.build_model()
-            self.model.save(self.model_file_name)
-            self.write_parameters(self.config_file_name)
-            print("\nCreated new model with name '{}'".format(model_name))
+            self.save_checkpoint(0)
+            print("\nCreated new model with name '{}'".format(model_id))
 
     def write_parameters(self, config_file):
         items = FLAGS.flag_values_dict()
@@ -54,6 +49,9 @@ class AtariAgent:
                     setattr(FLAGS, key, value)
 
     def write_iteration(self, config_file, iteration):
+        if not os.path.exists(config_file):
+            self.write_parameters(config_file)
+
         with open(config_file, "r") as f:
             items = json.load(f)
 
@@ -147,7 +145,9 @@ class AtariAgent:
             action = np.argmax(q_values)
         return action
 
-    def save_model_to_file(self, iteration):
-        self.model.save(self.model_file_name)
-        self.write_iteration(self.config_file_name, iteration)
-
+    def save_checkpoint(self, iteration, new_best=False):
+        self.model.save(self.model_name + '.h5')
+        self.write_iteration(self.model_name + '.json', iteration)
+        if new_best:
+            self.model.save(self.model_name + '_best.h5')
+            self.write_iteration(self.model_name + '_best.json', iteration)

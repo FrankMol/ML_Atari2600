@@ -2,7 +2,7 @@
 import gym
 
 # make env before importing tensorflow, otherwise it will not load for some reason
-env = gym.make('BreakoutDeterministic-v4')  # training environment
+env_train = gym.make('BreakoutDeterministic-v4')  # training environment
 env_test = gym.make('BreakoutDeterministic-v4')  # test environment
 
 import numpy as np
@@ -21,9 +21,11 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 default_model_name = "untitled_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
 ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
+NO_OP_ACTION = 1
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
+# flags.DEFINE_integer('info_frequency', 1000, "number of iterations between training progress updates printed")
 flags.DEFINE_integer('checkpoint_frequency', 1000, "number of iterations after which model file is updated")
 flags.DEFINE_integer('max_iterations', 10000000, "number of iterations after which training is done")
 flags.DEFINE_integer('batch_size', 32, "mini batch size")
@@ -51,27 +53,8 @@ def update_state(state, frame):
     return next_state
 
 
-def play_test_episode(agent):
-    score = 0
-    is_done = 0
-    steps = 0
-    frame = env_test.reset()
-    frame = preprocess(frame)
-    state = np.stack((frame, frame, frame, frame), axis=2)
-    state = np.reshape([state], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
-    while not is_done and steps < 1000:
-        frame, reward, is_done, _ = env_test.step(agent.choose_action(state, 0))
-        state = update_state(state, frame)
-        score += reward
-        steps += 1
-    if is_done:
-        return score
-    else:
-        return "DNF"
-
-
 # reset environment and get first state
-def get_start_state():
+def get_start_state(env):
     frame = env.reset()
     frame = preprocess(frame)
     state = np.stack((frame, frame, frame, frame), axis=2)
@@ -79,11 +62,30 @@ def get_start_state():
     return state
 
 
-def initialize_memory(agent):
+def play_episode(env, agent):
+    score = 0
+    is_done = 0
+    steps = 0
+    state = get_start_state(env)
+    while not is_done:
+        frame, reward, is_done, _ = env.step(agent.choose_action(state, 0))
+        state = update_state(state, frame)
+        score += reward
+        steps += 1
+        # low points in large no of steps means agent only plays no-op. Stop testing
+        if steps > 1000 and score < 30:
+            break
+    if is_done:
+        return score
+    else:
+        return -1
+
+
+def initialize_memory(env, agent):
     # create memory object
     memory = deque(maxlen=FLAGS.memory_size)
 
-    state = get_start_state()
+    state = get_start_state(env)
 
     # choose epsilon for initialization of memory, use iteration provided by flags
     epsilon = get_epsilon_for_iteration(FLAGS.iteration)
@@ -92,7 +94,7 @@ def initialize_memory(agent):
     no_op = random.randrange(FLAGS.no_op_max)
     for i in range(FLAGS.memory_start_size):
         if no_op > 0:
-            action = 0
+            action = NO_OP_ACTION
             no_op -= 1
         else:
             action = agent.choose_action(state, epsilon)
@@ -110,20 +112,26 @@ def initialize_memory(agent):
 
 def main(argv):
 
-    # make agent
-    if len(argv) > 1:
-        agent = AtariAgent(env, argv[1])
+    env = env_train
+    # get model id from command line or use default name
+    if len(argv) > 1 and not argv[1].startswith("--"):
+        model_id = argv[1]
     else:
-        agent = AtariAgent(env)
+        model_id = default_model_name
 
-    # initialize replay memory
-    memory = initialize_memory(agent)
-    state = get_start_state()
+    # instantiate agent
+    agent = AtariAgent(env, model_id)
+
+    # initialize replay memory and state
+    memory = initialize_memory(env, agent)
+    state = get_start_state(env)
+
     # start timer
     start_time = time.time()
     # start training
     iteration = FLAGS.iteration
-    no_op = random.randrange(FLAGS.no_op_max) # 'do nothing' actions left to play
+    no_op = random.randrange(FLAGS.no_op_max)  # 'do nothing' actions left to play at beginning of episode
+    best_score = -1  # keeps track of best score reached, used for saving best-so-far model
     try:
         while iteration < FLAGS.max_iterations:
 
@@ -134,7 +142,7 @@ def main(argv):
 
                 # Choose the action -> do nothing at beginning of new episode
                 if no_op > 0:
-                    action = 0
+                    action = NO_OP_ACTION
                     no_op -= 1
                 else:
                     action = agent.choose_action(state, epsilon)
@@ -146,7 +154,7 @@ def main(argv):
 
                 # reset game if game over
                 if is_done:
-                    state = get_start_state()
+                    state = get_start_state(env)
                     no_op = random.randrange(FLAGS.no_op_max)
                 else:
                     state = next_state
@@ -157,21 +165,25 @@ def main(argv):
 
             # provide feedback about iteration, elapsed time, current performance
             if iteration % FLAGS.checkpoint_frequency == 0 and not iteration == FLAGS.iteration:
-                score = play_test_episode(agent)
+                score = play_episode(env_test, agent)  # play complete test episode to rate performance
                 cur_time = time.time()
                 m, s = divmod(cur_time-start_time, 60)
                 h, m = divmod(m, 60)
                 time_str = "%d:%02d:%02d" % (h, m, s)
-                print("iteration: {}, elapsed time: {}, score: {}".format(iteration, time_str, score))
-                agent.save_model_to_file(iteration)
-                # TODO: save separate model if score is best so far
+                # check if score is best so far and update model file(s)
+                is_highest = score > best_score
+                agent.save_checkpoint(iteration, is_highest)
+                if is_highest:
+                    best_score = score
+                print("iteration: {}, elapsed time: {}, score: {}, best: {}".format(iteration, time_str,
+                                                                                    int(score), int(best_score)))
 
             iteration += 1
     except KeyboardInterrupt:
         print("\nTraining stopped by user")
 
     # save final state of model
-    agent.save_model_to_file(iteration)
+    agent.save_checkpoint(iteration)
 
     env.close()
     env_test.close()
