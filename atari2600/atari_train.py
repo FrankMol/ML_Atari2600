@@ -25,7 +25,6 @@ NO_OP_ACTION = 0
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
-# flags.DEFINE_integer('info_frequency', 1000, "number of iterations between training progress updates printed")
 flags.DEFINE_integer('checkpoint_frequency', 1000, "number of iterations after which model file is updated")
 flags.DEFINE_integer('max_iterations', 10000000, "number of iterations after which training is done")
 flags.DEFINE_integer('batch_size', 32, "mini batch size")
@@ -81,6 +80,7 @@ def play_episode(env, agent):
         return -1
 
 
+# create a replay memory in the form of a deque, and fill with a number of states
 def initialize_memory(env, agent):
     # create memory object
     memory = deque(maxlen=FLAGS.memory_size)
@@ -100,6 +100,8 @@ def initialize_memory(env, agent):
             action = agent.choose_action(state, epsilon)
 
         frame, reward, is_done, _ = env.step(action)
+        # clip reward
+        reward = np.sign(reward)
         next_state = update_state(state, frame)
         memory.append((state, action, reward, next_state, is_done))
         state = next_state
@@ -148,6 +150,9 @@ def main(argv):
                     action = agent.choose_action(state, epsilon)
                 # Play one game iteration
                 frame, reward, is_done, _ = env.step(action)
+                # clip reward
+                reward = np.sign(reward)
+                # update state by adding new frame and removing oldest frame
                 next_state = update_state(state, frame)
                 # add state to memory
                 memory.append((state, action, reward, next_state, is_done))
