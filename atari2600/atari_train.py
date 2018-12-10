@@ -91,7 +91,7 @@ def initialize_memory(env, agent):
     epsilon = get_epsilon_for_iteration(FLAGS.iteration)
 
     print("Initializing replay memory with {} states...".format(FLAGS.memory_start_size))
-    no_op = random.randrange(FLAGS.no_op_max)
+    no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
     for i in range(FLAGS.memory_start_size):
         if no_op > 0:
             action = FLAGS.no_op_action
@@ -108,7 +108,7 @@ def initialize_memory(env, agent):
 
         if is_done:
             env.reset()
-            no_op = random.randrange(FLAGS.no_op_max)
+            no_op = random.randrange(FLAGS.no_op_max+1) # add 1 so that no_op_max can be set to 0
     print("Replay memory initialized")
     return memory
 
@@ -139,7 +139,7 @@ def main(argv):
         print("Resuming training at iteration {}...".format(iteration))
 
     # start training
-    no_op = random.randrange(FLAGS.no_op_max)  # 'do nothing' actions left to play at beginning of episode
+    no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
     best_score = -1  # keeps track of best score reached, used for saving best-so-far model
     try:
         while iteration < FLAGS.max_iterations:
@@ -167,7 +167,7 @@ def main(argv):
                 # reset game if game over
                 if is_done:
                     state = get_start_state(env)
-                    no_op = random.randrange(FLAGS.no_op_max)
+                    no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
                 else:
                     state = next_state
 
