@@ -165,7 +165,7 @@ def process_rewards(r_list):
 
 
 def generate_episode_batches_and_train_network(n_batches=10):
-    env = gym.make('Pong-v0')
+    env = gym.make('Breakout-v0')
     batch_state_list=[]
     batch_up_or_down_action_list=[]
     batch_rewards_list=[]
