@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[10]:
+# In[1]:
 
 
 import gym
@@ -10,14 +10,14 @@ import datetime
 import keras 
 
 
-# In[11]:
+# In[2]:
 
 
 import matplotlib.pyplot as plt
 get_ipython().run_line_magic('matplotlib', 'inline')
 
 
-# In[12]:
+# In[3]:
 
 
 def preprocess_frames(new_frame,last_frame):
@@ -40,42 +40,32 @@ def preprocess_frames(new_frame,last_frame):
     return diff
 
 
-# In[ ]:
+# In[4]:
+
+
+# inputs = keras.layers.Input(shape=(80,80))
+# flattened_layer = keras.layers.Flatten()(inputs)
+# full_connect_1 = keras.layers.Dense(units=200,activation='relu',use_bias=False,)(flattened_layer)
+# softmax_output = keras.layers.Dense(4,activation='softmax',use_bias=False)(full_connect_1)
+# policy_network_model = keras.models.Model(inputs=inputs,outputs=softmax_output)
+# policy_network_model.summary()
+
+
+# In[6]:
 
 
 inputs = keras.layers.Input(shape=(80,80))
-flattened_layer = keras.layers.Flatten()(inputs)
-full_connect_1 = keras.layers.Dense(units=200,activation='relu',use_bias=False,)(flattened_layer)
-softmax_output = keras.layers.Dense(4,activation='softmax',use_bias=False)(full_connect_1)
+channeled_input = keras.layers.Reshape((80,80,1))(inputs) # Conv2D requries (batch, height, width, channels)  so we need to create a dummy channel 
+conv_1 = keras.layers.Conv2D(filters=10,kernel_size=20,padding='valid',activation='relu',strides=(4,4),use_bias=False)(channeled_input)
+conv_2 = keras.layers.Conv2D(filters=20,kernel_size=10,padding='valid',activation='relu',strides=(2,2),use_bias=False)(conv_1)
+conv_3 = keras.layers.Conv2D(filters=40,kernel_size=3,padding='valid',activation='relu',use_bias=False)(conv_2)
+flattened_layer = keras.layers.Flatten()(conv_3)
+softmax_output = keras.layers.Dense(4,activation='softmax',use_bias=False)(flattened_layer)
 policy_network_model = keras.models.Model(inputs=inputs,outputs=softmax_output)
 policy_network_model.summary()
 
 
-# In[ ]:
-
-
-# inputs = keras.layers.Input(shape=(80,80))
-# channeled_input = keras.layers.Reshape((80,80,1))(inputs) # Conv2D requries (batch, height, width, channels)  so we need to create a dummy channel 
-# conv_1 = keras.layers.Conv2D(filters=10,kernel_size=20,padding='valid',activation='relu',strides=(4,4),use_bias=False)(channeled_input)
-# conv_2 = keras.layers.Conv2D(filters=20,kernel_size=10,padding='valid',activation='relu',strides=(2,2),use_bias=False)(conv_1)
-# conv_3 = keras.layers.Conv2D(filters=40,kernel_size=3,padding='valid',activation='relu',use_bias=False)(conv_2)
-# flattened_layer = keras.layers.Flatten()(conv_3)
-#softmax_output = keras.layers.Dense(4,activation='softmax',use_bias=False)(flattened_layer)
-# policy_network_model = keras.models.Model(inputs=inputs,outputs=sigmoid_output)
-# policy_network_model.summary()
-
-
-# In[19]:
-
-
-episode_reward = keras.layers.Input(shape=(1,),name='episode_reward')
-policy_network_train = keras.models.Model(inputs=[inputs,episode_reward],outputs=sigmoid_output)
-
-my_optimizer = keras.optimizers.RMSprop(lr=0.0001)
-policy_network_train.compile(optimizer=my_optimizer,loss=m_loss(episode_reward),)
-
-
-# In[20]:
+# In[9]:
 
 
 def m_loss(episode_reward):
@@ -97,7 +87,17 @@ def m_loss(episode_reward):
     return loss
 
 
-# In[21]:
+# In[11]:
+
+
+episode_reward = keras.layers.Input(shape=(1,),name='episode_reward')
+policy_network_train = keras.models.Model(inputs=[inputs,episode_reward],outputs=softmax_output)
+
+my_optimizer = keras.optimizers.RMSprop(lr=0.0001)
+policy_network_train.compile(optimizer=my_optimizer,loss=m_loss(episode_reward),)
+
+
+# In[12]:
 
 
 def generate_episode(policy_network):
@@ -142,7 +142,7 @@ def generate_episode(policy_network):
     return states_list,action_list,rewards_list,network_output_list
 
 
-# In[22]:
+# In[13]:
 
 
 def process_rewards(r_list):
@@ -161,7 +161,7 @@ def process_rewards(r_list):
     return rew
 
 
-# In[23]:
+# In[14]:
 
 
 def generate_episode_batches_and_train_network(n_batches=10):
