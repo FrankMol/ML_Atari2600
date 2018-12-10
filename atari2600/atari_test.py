@@ -44,7 +44,7 @@ def play_episode(env, agent):
         score += reward
         steps += 1
         # no points in large no of steps means agent only plays no-op. Stop testing
-        if steps > 1000 and score == 0:
+        if (steps > 1000 and score < 30) or steps > 20000:
             break
     if is_done:
         return score
