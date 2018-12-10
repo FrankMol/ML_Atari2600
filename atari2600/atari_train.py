@@ -94,7 +94,7 @@ def initialize_memory(env, agent):
     no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
     for i in range(FLAGS.memory_start_size):
         if no_op > 0:
-            action = FLAGS.no_op_action
+            action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else env.action_space.sample()
             no_op -= 1
         else:
             action = agent.choose_action(state, epsilon)
@@ -151,7 +151,7 @@ def main(argv):
 
                 # Choose the action -> do nothing at beginning of new episode
                 if no_op > 0:
-                    action = FLAGS.no_op_action
+                    action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else env.action_space.sample()
                     no_op -= 1
                 else:
                     action = agent.choose_action(state, epsilon)
