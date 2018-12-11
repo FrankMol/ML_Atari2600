@@ -8,8 +8,8 @@
 import gym
 
 # make env before importing tensorflow, otherwise it will not load for some reason
-env_train = gym.make('BreakoutDeterministic-v4')  # training environment
-env_test = gym.make('BreakoutDeterministic-v4')  # test environment
+env_train = gym.make('BreakoutDeterministic-v0')  # training environment
+env_test = gym.make('BreakoutDeterministic-v0')  # test environment
 
 import numpy as np
 import os
@@ -17,7 +17,6 @@ import sys
 import random
 import time
 import csv
-from atari_agent import AtariAgent
 from pg_agent import PolicyGradientAgent
 from atari_preprocessing import preprocess
 from collections import deque
@@ -33,7 +32,7 @@ MODEL_PATH = 'trained_models/'
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
-flags.DEFINE_integer('checkpoint_frequency', 1000, "number of iterations after which model file is updated")
+flags.DEFINE_integer('checkpoint_frequency', 2, "number of iterations after which model file is updated")
 flags.DEFINE_integer('max_iterations', 20000000, "number of iterations after which training is done")
 flags.DEFINE_integer('batch_size', 32, "mini batch size")
 flags.DEFINE_integer('memory_size', 1000000, "max number of stored states from which batch is sampled")
@@ -96,6 +95,53 @@ def write_logs(model_id, iteration, seconds, score):
         csv_writer = csv.writer(f)
         csv_writer.writerow([iteration, round(seconds), score])
 
+def preprocess_frames(new_frame,last_frame):
+    # inputs are 2 numpy 2d arrays
+    n_frame = new_frame.astype(np.int32)
+    n_frame[(n_frame==2000)|(n_frame==180)]=0 # remove backgound colors
+    l_frame = last_frame.astype(np.int32)
+    l_frame[(l_frame==200)|(l_frame==180)]=0 # remove backgound colors
+    diff = n_frame - l_frame
+    # crop top and bot 
+    diff = diff[35:195]
+    # down sample 
+    diff=diff[::2,::2]
+    # convert to grayscale
+    diff = diff[:,:,0] * 299. / 1000 + diff[:,:,1] * 587. / 1000 + diff[:,:,2] * 114. / 1000
+    # rescale numbers between 0 and 1
+    max_val =diff.max() if diff.max()> abs(diff.min()) else abs(diff.min())
+    if max_val != 0:
+        diff=diff/max_val
+    return diff        
+        
+def play_model(env, policy_network):
+    done=False
+    observation = env.reset()
+    new_observation = observation
+    while done==False:
+        time.sleep(1/80)
+        
+        processed_network_input = preprocess_frames(new_frame=new_observation,last_frame=observation)
+        reshaped_input = np.expand_dims(processed_network_input,axis=0) # x shape is (80,80) so we need similar reshape(x,(1,80,80))
+
+        
+        p0 = policy_network.predict(reshaped_input,batch_size=1)[0][0]
+        p1 = policy_network.predict(reshaped_input,batch_size=1)[0][1]
+        p2 = policy_network.predict(reshaped_input,batch_size=1)[0][2]
+        p3 = policy_network.predict(reshaped_input,batch_size=1)[0][3]
+        sump = p0+p1+p2+p3;
+        actual_action = np.random.choice(a=[0,1,2,3],size=1,p=[p0, p1, p2, 1-p0-p1-p2]) # 2 is up. 3 is down 
+        #env.render()
+        
+        observation= new_observation
+        new_observation, reward, done, info = env.step(actual_action)
+        #if reward!=0:
+        #    print(reward)
+        if done:
+            break
+    return reward
+    #env.close()
+    
 
 # create a replay memory in the form of a deque, and fill with a number of states
 def initialize_memory(env, agent):
@@ -167,7 +213,7 @@ def main(argv):
             
             # provide feedback about iteration, elapsed time, current performance
             if iteration % FLAGS.checkpoint_frequency == 0 and not iteration == FLAGS.iteration:
-                score = evaluate_model(env, agent)  # play complete test episode to rate performance
+                score = play_model(env_test, agent.model)#evaluate_model(env, agent)  # play complete test episode to rate performance
                 cur_time = time.time()
                 m, s = divmod(cur_time-start_time, 60)
                 h, m = divmod(m, 60)
