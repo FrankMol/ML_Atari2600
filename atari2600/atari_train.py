@@ -26,7 +26,7 @@ MODEL_PATH = 'trained_models/'
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
-flags.DEFINE_integer('checkpoint_frequency', 1000, "number of iterations after which model file is updated")
+flags.DEFINE_integer('checkpoint_frequency', 10000, "number of iterations after which model file is updated")
 flags.DEFINE_integer('max_iterations', 20000000, "number of iterations after which training is done")
 flags.DEFINE_integer('batch_size', 32, "mini batch size")
 flags.DEFINE_integer('memory_size', 1000000, "max number of stored states from which batch is sampled")
@@ -34,7 +34,7 @@ flags.DEFINE_integer('memory_start_size', 50000, "number of states with which th
 flags.DEFINE_integer('agent_history', 4, "number of frames in each state")
 flags.DEFINE_float('initial_epsilon', 1, "initial value of epsilon used for exploration of state space")
 flags.DEFINE_float('final_epsilon', 0.1, "final value of epsilon used for exploration of state space")
-flags.DEFINE_float('eval_epsilon', 0, "value of epsilon used in epsilon-greedy policy evaluation")
+flags.DEFINE_float('eval_epsilon', 0.0, "value of epsilon used in epsilon-greedy policy evaluation")
 flags.DEFINE_integer('eval_steps', 10000, "number of evaluation steps used to evaluate performance")
 flags.DEFINE_integer('annealing_steps', 1000000, "frame at which final exploration reached")  # LET OP: frame/q?
 flags.DEFINE_integer('no_op_max', 10, "max number of do nothing actions at beginning of episode")
