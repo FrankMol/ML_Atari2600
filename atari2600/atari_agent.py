@@ -8,7 +8,7 @@ from tensorflow import flags
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
+ATARI_SHAPE = (84, 84, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 

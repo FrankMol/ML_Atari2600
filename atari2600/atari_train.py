@@ -10,38 +10,42 @@ import os
 import sys
 import random
 import time
+import csv
 from atari_agent import AtariAgent
 from atari_preprocessing import preprocess
 from collections import deque
 from tensorflow import flags
 from datetime import datetime
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 default_model_name = "untitled_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
-ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
+ATARI_SHAPE = (84, 84, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
+MODEL_PATH = 'trained_models/'
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
 flags.DEFINE_integer('checkpoint_frequency', 1000, "number of iterations after which model file is updated")
-flags.DEFINE_integer('max_iterations', 10000000, "number of iterations after which training is done")
+flags.DEFINE_integer('max_iterations', 20000000, "number of iterations after which training is done")
 flags.DEFINE_integer('batch_size', 32, "mini batch size")
 flags.DEFINE_integer('memory_size', 1000000, "max number of stored states from which batch is sampled")
 flags.DEFINE_integer('memory_start_size', 50000, "number of states with which the memory is initialized")
 flags.DEFINE_integer('agent_history', 4, "number of frames in each state")
 flags.DEFINE_float('initial_epsilon', 1, "initial value of epsilon used for exploration of state space")
 flags.DEFINE_float('final_epsilon', 0.1, "final value of epsilon used for exploration of state space")
-flags.DEFINE_integer('final_exploration_frame', 1000000, "frame at which final exploration reached")  # LET OP: frame/q?
+flags.DEFINE_float('eval_epsilon', 0.05, "value of epsilon used in epsilon-greedy policy evaluation")
+flags.DEFINE_integer('eval_steps', 10000, "number of evaluation steps used to evaluate performance")
+flags.DEFINE_integer('annealing_steps', 1000000, "frame at which final exploration reached")  # LET OP: frame/q?
 flags.DEFINE_integer('no_op_max', 30, "max number of do nothing actions at beginning of episode")
 flags.DEFINE_integer('no_op_action', 0, "action that the agent plays as no-op at beginning of episode")
 flags.DEFINE_integer('update_frequency', 4, "number of actions played by agent between each q-iteration")
-flags.DEFINE_integer('iteration', 0, "counter that keeps track of training iterations")
+flags.DEFINE_integer('iteration', 0, "iteration at which training should start or resume")
 
 
 def get_epsilon_for_iteration(iteration):
     epsilon = max(FLAGS.final_epsilon, FLAGS.initial_epsilon - (FLAGS.initial_epsilon - FLAGS.final_epsilon)
-                  / FLAGS.final_exploration_frame * iteration)
+                  / FLAGS.annealing_steps * iteration)
     return epsilon
 
 
@@ -61,23 +65,29 @@ def get_start_state(env):
     return state
 
 
-def play_episode(env, agent):
+def evaluate_model(env, agent, n_steps=FLAGS.eval_steps):
+    episode_cnt = 0
     score = 0
-    is_done = 0
-    steps = 0
+    evaluation_score = 0
+
     state = get_start_state(env)
-    while not is_done:
-        frame, reward, is_done, _ = env.step(agent.choose_action(state, 0))
+    for _ in range(n_steps):
+        frame, reward, is_done, _ = env.step(agent.choose_action(state, FLAGS.eval_epsilon))
         state = update_state(state, frame)
         score += reward
-        steps += 1
-        # low points in large no of steps means agent only plays no-op. Stop testing to prevent code from freezing
-        if (steps > 1000 and score < 30) or steps > 20000:
-            break
-    if is_done:
-        return score
-    else:
-        return -1
+        if is_done:
+            evaluation_score += score
+            score = 0
+            state = get_start_state(env)
+            episode_cnt += 1
+    return evaluation_score/episode_cnt if episode_cnt > 0 else -1
+
+
+def write_logs(model_id, iteration, seconds, score):
+    file_name = os.path.join(MODEL_PATH, model_id) + '.csv'
+    with open(file_name, 'a') as f:
+        csv_writer = csv.writer(f)
+        csv_writer.writerow([iteration, round(seconds), score])
 
 
 # create a replay memory in the form of a deque, and fill with a number of states
@@ -108,7 +118,7 @@ def initialize_memory(env, agent):
 
         if is_done:
             env.reset()
-            no_op = random.randrange(FLAGS.no_op_max+1) # add 1 so that no_op_max can be set to 0
+            no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
     print("Replay memory initialized")
     return memory
 
@@ -177,7 +187,7 @@ def main(argv):
 
             # provide feedback about iteration, elapsed time, current performance
             if iteration % FLAGS.checkpoint_frequency == 0 and not iteration == FLAGS.iteration:
-                score = play_episode(env_test, agent)  # play complete test episode to rate performance
+                score = evaluate_model(env, agent)  # play complete test episode to rate performance
                 cur_time = time.time()
                 m, s = divmod(cur_time-start_time, 60)
                 h, m = divmod(m, 60)
@@ -187,8 +197,9 @@ def main(argv):
                 agent.save_checkpoint(iteration, is_highest)
                 if is_highest:
                     best_score = score
-                print("iteration {}, elapsed time: {}, score: {}, best: {}".format(iteration, time_str,
-                                                                                   int(score), int(best_score)))
+                print("iteration {}, elapsed time: {}, score: {}, best: {}".format(iteration, time_str, round(score, 2),
+                                                                                   round(best_score, 2)))
+                write_logs(model_id, iteration, cur_time-start_time, score)
 
             iteration += 1
     except KeyboardInterrupt:
