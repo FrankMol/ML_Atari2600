@@ -204,8 +204,9 @@ def main(argv):
     # start training
     #no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
     best_score = -1  # keeps track of best score reached, used for saving best-so-far model
+    stop = False;
     try:
-        while iteration < FLAGS.max_iterations:
+        while iteration < FLAGS.max_iterations or stop == True:
 
             agent.generate_episode_batches_and_train_network(env, 10)
             
@@ -223,6 +224,9 @@ def main(argv):
                 agent.save_checkpoint(iteration, is_highest)
                 if is_highest:
                     best_score = score
+                    
+                if h > 2:
+                    stop = True
                 print("iteration {}, elapsed time: {}, score: {}, best: {}".format(iteration, time_str, round(score, 2),
                                                                                    round(best_score, 2)))
                 write_logs(model_id, iteration, cur_time-start_time, score)
