@@ -31,7 +31,7 @@ class PolicyGradientAgent:
 
     def __init__(self, env, model_id):
         self.n_actions = env.action_space.n
-        self.model_name = os.path.join(MODEL_PATH, model_id)
+        self.model_name = os.path.join(model_id)
         if os.path.exists(self.model_name + '.h5'):
             # load model and parameters
             self.model = keras.models.load_model(self.model_name + '.h5')
