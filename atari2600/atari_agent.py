@@ -8,7 +8,7 @@ from tensorflow import flags
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-ATARI_SHAPE = (84, 84, 4)  # tensor flow backend -> channels last
+ATARI_SHAPE = (80, 80, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 
@@ -72,16 +72,20 @@ class AtariAgent:
         normalized = keras.layers.Lambda(lambda x: x / 255.0)(frames_input)
 
         # "The first hidden layer convolves 16 8×8 filters with stride 4 with the input image and applies a rectifier nonlinearity."
-        conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4))(normalized)
+        conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4),
+                                     kernel_initializer=keras.initializers.VarianceScaling(scale=2.0),)(normalized)
 
         # "The second hidden layer convolves 32 4×4 filters with stride 2, again followed by a rectifier nonlinearity."
-        conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2))(conv_1)
+        conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2),
+                                     kernel_initializer=keras.initializers.VarianceScaling(scale=2.0))(conv_1)
         # Flattening the second convolutional layer.
         conv_flattened = keras.layers.core.Flatten()(conv_2)
         # "The final hidden layer is fully-connected and consists of 256 rectifier units."
-        hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
+        hidden = keras.layers.Dense(256, activation='relu',
+                                    kernel_initializer=keras.initializers.VarianceScaling(scale=2.0))(conv_flattened)
         # "The output layer is a fully-connected linear layer with a single output for each valid action."
-        output = keras.layers.Dense(self.n_actions)(hidden)
+        output = keras.layers.Dense(self.n_actions,
+                                    kernel_initializer=keras.initializers.VarianceScaling(scale=2.0))(hidden)
         # Finally, we multiply the output by the mask!
         filtered_output = keras.layers.merge.Multiply()([output, actions_input])
 
