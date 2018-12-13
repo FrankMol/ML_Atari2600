@@ -11,6 +11,7 @@ import sys
 import random
 import time
 import csv
+from replay_memory import ReplayMemory
 from atari_agent import AtariAgent
 from atari_preprocessing import preprocess
 from collections import deque
@@ -98,7 +99,7 @@ def write_logs(model_id, iteration, seconds, score):
 # create a replay memory in the form of a deque, and fill with a number of states
 def initialize_memory(env, agent):
     # create memory object
-    memory = deque(maxlen=FLAGS.memory_size)
+    memory = ReplayMemory()
 
     state = get_start_state(env)
 
@@ -118,7 +119,9 @@ def initialize_memory(env, agent):
         # clip reward
         reward = np.sign(reward)
         next_state = update_state(state, frame)
-        memory.append((state, action, reward, next_state, is_done))
+        # memory.append((state, action, reward, next_state, is_done))
+        frame = preprocess(frame)
+        memory.add_experience(action, frame, reward, is_done)
         state = next_state
 
         if is_done:
@@ -177,7 +180,8 @@ def main(argv):
                 # update state by adding new frame and removing oldest frame
                 next_state = update_state(state, frame)
                 # add state to memory
-                memory.append((state, action, reward, next_state, is_done))
+                # memory.append((state, action, reward, next_state, is_done))
+                memory.add_experience(action, preprocess(frame), reward, is_done)
 
                 # reset game if game over
                 if is_done:
@@ -187,7 +191,9 @@ def main(argv):
                     state = next_state
 
             # Sample mini batch from memory and fit model
-            batch = random.sample(memory, FLAGS.batch_size)
+            # batch = random.sample(memory, FLAGS.batch_size)
+            batch = memory.get_minibatch()
+            # print(batch)
             agent.fit_batch(batch)
 
             # provide feedback about iteration, elapsed time, current performance

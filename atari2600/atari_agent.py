@@ -113,16 +113,18 @@ class AtariAgent:
 
         """
         # first decode batch into arrays of states, rewards and actions
-        start_states = np.zeros((32, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
-        next_states = np.zeros((32, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
-        actions, rewards, is_terminal = [], [], []
+        # start_states = np.zeros((32, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
+        # next_states = np.zeros((32, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
+        # actions, rewards, is_terminal = [], [], []
+        #
+        # for idx, val in enumerate(batch):
+        #     start_states[idx] = val[0]
+        #     actions.append(val[1])
+        #     rewards.append(val[2])
+        #     next_states[idx] = val[3]
+        #     is_terminal.append(val[4])
 
-        for idx, val in enumerate(batch):
-            start_states[idx] = val[0]
-            actions.append(val[1])
-            rewards.append(val[2])
-            next_states[idx] = val[3]
-            is_terminal.append(val[4])
+        start_states, actions, rewards, next_states, is_terminal = batch
 
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
