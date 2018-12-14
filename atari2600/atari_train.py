@@ -2,8 +2,8 @@
 import gym
 
 # make env before importing tensorflow, otherwise it will not load for some reason
-env_train = gym.make('PongDeterministic-v4')  # training environment
-env_test = gym.make('PongDeterministic-v4')  # test environment
+env_train = gym.make('BreakoutDeterministic-v4')  # training environment
+env_test = gym.make('BreakoutDeterministic-v4')  # test environment
 
 import numpy as np
 import os
@@ -35,7 +35,7 @@ flags.DEFINE_integer('memory_start_size', 50000, "number of states with which th
 flags.DEFINE_integer('agent_history', 4, "number of frames in each state")
 flags.DEFINE_float('initial_epsilon', 1, "initial value of epsilon used for exploration of state space")
 flags.DEFINE_float('final_epsilon', 0.1, "final value of epsilon used for exploration of state space")
-flags.DEFINE_float('eval_epsilon', 0.0, "value of epsilon used in epsilon-greedy policy evaluation")
+flags.DEFINE_float('eval_epsilon', 0.05, "value of epsilon used in epsilon-greedy policy evaluation")
 flags.DEFINE_integer('eval_steps', 10000, "number of evaluation steps used to evaluate performance")
 flags.DEFINE_integer('annealing_steps', 1000000, "frame at which final exploration reached")  # LET OP: frame/q?
 flags.DEFINE_integer('no_op_max', 10, "max number of do nothing actions at beginning of episode")
@@ -74,11 +74,11 @@ def evaluate_model(env, agent, n_steps=FLAGS.eval_steps):
     state = get_start_state(env)
     for _ in range(n_steps):
         if no_op > 0:
-            action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else env.action_space.sample()
+            action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else random.randrange(env.action_space.n-1)
             no_op -= 1
         else:
             action = agent.choose_action(state, FLAGS.eval_epsilon)
-        frame, reward, is_done, _ = env.step(action)
+        frame, reward, is_done, _ = env.step(action+1)
         state = update_state(state, frame)
         score += reward
         if is_done:
@@ -110,12 +110,12 @@ def initialize_memory(env, agent):
     no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
     for i in range(FLAGS.memory_start_size):
         if no_op > 0:
-            action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else env.action_space.sample()
+            action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else random.randrange(env.action_space.n-1)
             no_op -= 1
         else:
             action = agent.choose_action(state, epsilon)
 
-        frame, reward, is_done, _ = env.step(action)
+        frame, reward, is_done, _ = env.step(action+1)
         # clip reward
         reward = np.sign(reward)
         next_state = update_state(state, frame)
@@ -169,12 +169,12 @@ def main(argv):
 
                 # Choose the action -> do nothing at beginning of new episode
                 if no_op > 0:
-                    action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else env.action_space.sample()
+                    action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else random.randrange(env.action_space.n-1)
                     no_op -= 1
                 else:
                     action = agent.choose_action(state, epsilon)
                 # Play one game iteration
-                frame, reward, is_done, _ = env.step(action)
+                frame, reward, is_done, _ = env.step(action+1)
                 # clip reward
                 reward = np.sign(reward)
                 # update state by adding new frame and removing oldest frame

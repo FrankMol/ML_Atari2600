@@ -23,7 +23,7 @@ flags.DEFINE_float('min_sq_gradient', 0.01, "constant added to squared gradient"
 class AtariAgent:
 
     def __init__(self, env, model_id):
-        self.n_actions = env.action_space.n
+        self.n_actions = env.action_space.n-1
         self.model_name = os.path.join(MODEL_PATH, model_id)
         if os.path.exists(self.model_name + '.h5'):
             # load model and parameters
