@@ -49,22 +49,6 @@ def get_epsilon_for_iteration(iteration):
     return epsilon
 
 
-def update_state(state, frame):
-    frame = preprocess(frame)
-    frame = np.reshape([frame], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], 1))
-    next_state = np.append(frame, state[:, :, :, :3], axis=3)
-    return next_state
-
-
-# reset environment and get first state
-def get_start_state(env):
-    frame = env.reset()
-    frame = preprocess(frame)
-    state = np.stack((frame, frame, frame, frame), axis=2)
-    state = np.reshape([state], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
-    return state
-
-
 def evaluate_model(env, agent, n_steps=FLAGS.eval_steps):
     episode_cnt = 0
     score = 0
