@@ -152,6 +152,7 @@ def main(argv):
     # initialize replay memory and state
     memory = initialize_memory(env, agent)
     state = get_start_state(env)
+    lives = 5
 
     iteration = FLAGS.iteration
 
@@ -180,18 +181,24 @@ def main(argv):
                 else:
                     action = agent.choose_action(state, epsilon)
                 # Play one game iteration
-                frame, reward, is_done, _ = env.step(action+1)
+                frame, reward, is_done, info = env.step(action+1)
                 # clip reward
                 reward = np.sign(reward)
                 # update state by adding new frame and removing oldest frame
                 next_state = update_state(state, frame)
                 # add state to memory
                 # memory.append((state, action, reward, next_state, is_done))
-                memory.add_experience(action, preprocess(frame), reward, is_done)
+                if info['ale.lives'] < lives:
+                    terminal = True
+                    lives -= 1
+                else:
+                    terminal = is_done
+                memory.add_experience(action, preprocess(frame), reward, terminal)
 
                 # reset game if game over
                 if is_done:
                     state = get_start_state(env)
+                    lives = 5
                     no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
                 else:
                     state = next_state
