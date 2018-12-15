@@ -33,7 +33,8 @@ class AtariAgent:
         else:
             # make new model
             self.build_model()
-            self.save_checkpoint(0)
+            if FLAGS.use_checkpoints:
+                self.save_checkpoint(0)
             print("\nCreated new model with name '{}'".format(model_id))
 
     def write_parameters(self, config_file):
@@ -61,8 +62,6 @@ class AtariAgent:
             f.write(json.dumps(items, indent=4))
 
     def build_model(self):
-        # from keras import backend as K
-        # K.set_image_dim_ordering('th')
 
         # With the functional API we need to define the inputs.
         frames_input = keras.layers.Input(ATARI_SHAPE, name='frames')
@@ -73,11 +72,13 @@ class AtariAgent:
 
         # "The first hidden layer convolves 16 8×8 filters with stride 4 with the input image and applies a rectifier nonlinearity."
         conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4),
-                                     kernel_initializer=keras.initializers.VarianceScaling(scale=2.0),)(normalized)
+                                     kernel_initializer=keras.initializers.VarianceScaling(scale=2.0),
+                                     padding="valid")(normalized)
 
         # "The second hidden layer convolves 32 4×4 filters with stride 2, again followed by a rectifier nonlinearity."
         conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2),
-                                     kernel_initializer=keras.initializers.VarianceScaling(scale=2.0))(conv_1)
+                                     kernel_initializer=keras.initializers.VarianceScaling(scale=2.0),
+                                     padding="valid")(conv_1)
         # Flattening the second convolutional layer.
         conv_flattened = keras.layers.core.Flatten()(conv_2)
         # "The final hidden layer is fully-connected and consists of 256 rectifier units."
@@ -112,17 +113,6 @@ class AtariAgent:
         - is_terminal: numpy boolean array of whether the resulting state is terminal
 
         """
-        # first decode batch into arrays of states, rewards and actions
-        # start_states = np.zeros((32, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
-        # next_states = np.zeros((32, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
-        # actions, rewards, is_terminal = [], [], []
-        #
-        # for idx, val in enumerate(batch):
-        #     start_states[idx] = val[0]
-        #     actions.append(val[1])
-        #     rewards.append(val[2])
-        #     next_states[idx] = val[3]
-        #     is_terminal.append(val[4])
 
         start_states, actions, rewards, next_states, is_terminal = batch
 

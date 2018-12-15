@@ -14,7 +14,6 @@ import csv
 from replay_memory import ReplayMemory
 from atari_agent import AtariAgent
 from atari_preprocessing import preprocess
-from collections import deque
 from tensorflow import flags
 from datetime import datetime
 
@@ -35,7 +34,7 @@ flags.DEFINE_integer('memory_start_size', 50000, "number of states with which th
 flags.DEFINE_integer('agent_history', 4, "number of frames in each state")
 flags.DEFINE_float('initial_epsilon', 1, "initial value of epsilon used for exploration of state space")
 flags.DEFINE_float('final_epsilon', 0.1, "final value of epsilon used for exploration of state space")
-flags.DEFINE_float('eval_epsilon', 0.05, "value of epsilon used in epsilon-greedy policy evaluation")
+flags.DEFINE_float('eval_epsilon', 0.0, "value of epsilon used in epsilon-greedy policy evaluation")
 flags.DEFINE_integer('eval_steps', 10000, "number of evaluation steps used to evaluate performance")
 flags.DEFINE_integer('annealing_steps', 1000000, "frame at which final exploration reached")  # LET OP: frame/q?
 flags.DEFINE_integer('no_op_max', 10, "max number of do nothing actions at beginning of episode")
@@ -86,6 +85,7 @@ def evaluate_model(env, agent, n_steps=FLAGS.eval_steps):
             score = 0
             state = get_start_state(env)
             episode_cnt += 1
+            no_op = 1 #random.randrange(FLAGS.no_op_max + 1)
     return evaluation_score/episode_cnt if episode_cnt > 0 else -1
 
 
@@ -191,9 +191,7 @@ def main(argv):
                     state = next_state
 
             # Sample mini batch from memory and fit model
-            # batch = random.sample(memory, FLAGS.batch_size)
             batch = memory.get_minibatch()
-            # print(batch)
             agent.fit_batch(batch)
 
             # provide feedback about iteration, elapsed time, current performance
@@ -205,7 +203,8 @@ def main(argv):
                 time_str = "%d:%02d:%02d" % (h, m, s)
                 # check if score is best so far and update model file(s)
                 is_highest = score > best_score
-                agent.save_checkpoint(iteration, is_highest)
+                if FLAGS.use_checkpoints:
+                    agent.save_checkpoint(iteration, is_highest)
                 if is_highest:
                     best_score = score
                 print("iteration {}, elapsed time: {}, score: {}, best: {}".format(iteration, time_str, round(score, 2),
@@ -217,8 +216,9 @@ def main(argv):
         print("\nTraining stopped by user")
 
     # save final state of model
-    agent.save_checkpoint(iteration)
-    print("Latest checkpoint at iteration {}".format(iteration))
+    if FLAGS.use_checkpoints:
+        agent.save_checkpoint(iteration)
+        print("Latest checkpoint at iteration {}".format(iteration))
 
     env.close()
     env_test.close()
