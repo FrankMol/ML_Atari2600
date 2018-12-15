@@ -68,6 +68,7 @@ def get_start_state(env):
 def evaluate_model(env, agent, n_steps=FLAGS.eval_steps):
     episode_cnt = 0
     score = 0
+    lives = 5
     evaluation_score = 0
     no_op = random.randrange(FLAGS.no_op_max + 1)  # also use no-op in evaluation!
     state = get_start_state(env)
@@ -77,7 +78,7 @@ def evaluate_model(env, agent, n_steps=FLAGS.eval_steps):
             no_op -= 1
         else:
             action = agent.choose_action(state, FLAGS.eval_epsilon)
-        frame, reward, is_done, _ = env.step(action+1)
+        frame, reward, is_done, info = env.step(action+1)
         state = update_state(state, frame)
         score += reward
         if is_done:
@@ -85,7 +86,12 @@ def evaluate_model(env, agent, n_steps=FLAGS.eval_steps):
             score = 0
             state = get_start_state(env)
             episode_cnt += 1
+            lives = 5
             no_op = 1 #random.randrange(FLAGS.no_op_max + 1)
+        elif info['ale.lives'] < lives:
+            lives -= 1
+            no_op = 1
+
     return evaluation_score/episode_cnt if episode_cnt > 0 else -1
 
 
