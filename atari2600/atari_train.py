@@ -131,7 +131,7 @@ def main(argv):
                     q_iteration += 1
 
                 # provide feedback about iteration, elapsed time, current performance
-                if global_step % FLAGS.checkpoint_frequency == 0:
+                if global_step % FLAGS.checkpoint_frequency == 0 and global_step > FLAGS.memory_start_size:
                     score = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
                     cur_time = time.time()
                     m, s = divmod(cur_time-start_time, 60)
