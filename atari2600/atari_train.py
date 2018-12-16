@@ -34,7 +34,7 @@ flags.DEFINE_integer('memory_start_size', 50000, "number of states with which th
 flags.DEFINE_integer('agent_history', 4, "number of frames in each state")
 flags.DEFINE_float('initial_epsilon', 1, "initial value of epsilon used for exploration of state space")
 flags.DEFINE_float('final_epsilon', 0.1, "final value of epsilon used for exploration of state space")
-flags.DEFINE_float('eval_epsilon', 0.05, "value of epsilon used in epsilon-greedy policy evaluation")
+flags.DEFINE_float('eval_epsilon', 0.0, "value of epsilon used in epsilon-greedy policy evaluation")
 flags.DEFINE_integer('eval_steps', 10000, "number of evaluation steps used to evaluate performance")
 flags.DEFINE_integer('annealing_steps', 1000000, "frame at which final exploration reached")  # LET OP: frame/q?
 flags.DEFINE_integer('no_op_max', 10, "max number of do nothing actions at beginning of episode")
@@ -48,8 +48,13 @@ def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
     score = 0
     evaluation_score = 0
     controller.reset()
+    no_op = True
     for _ in range(n_steps):
-        action = agent.choose_action(controller.get_state(), FLAGS.eval_epsilon)
+        if no_op:
+            action = 1
+            no_op = False
+        else:
+            action = agent.choose_action(controller.get_state(), FLAGS.eval_epsilon)
         _, reward, is_done, life_lost = controller.step(action)
         score += reward
         if is_done:
@@ -57,6 +62,9 @@ def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
             score = 0
             controller.reset()
             episode_cnt += 1
+            break
+        if is_done or life_lost:
+            no_op = True
     return evaluation_score/episode_cnt if episode_cnt > 0 else -1
 
 
