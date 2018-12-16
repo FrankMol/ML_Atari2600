@@ -115,7 +115,7 @@ def main(argv):
 
             while not is_done:
                 # Choose the action -> do nothing at beginning of new episode
-                action = agent.choose_action(controller.get_state(), get_epsilon(global_step))
+                action = agent.choose_action(controller.get_state(), get_epsilon(q_iteration))
 
                 # interact with environment
                 frame, reward, is_done, life_lost = controller.step(action)
@@ -130,25 +130,26 @@ def main(argv):
                     agent.fit_batch(batch)
                     q_iteration += 1
 
-                # provide feedback about iteration, elapsed time, current performance
-                if q_iteration == 1:
-                    start_time = time.time()
-                if global_step % FLAGS.checkpoint_frequency == 0 and global_step > 0:
-                    score = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
-                    cur_time = time.time()
-                    m, s = divmod(cur_time-start_time, 60)
-                    h, m = divmod(m, 60)
-                    time_str = "%d:%02d:%02d" % (h, m, s)
-                    # check if score is best so far and update model file(s)
-                    is_highest = score > best_score
-                    if FLAGS.use_checkpoints:
-                        agent.save_checkpoint(global_step, is_highest)
-                    if is_highest:
-                        best_score = score
-                    print("iteration {}, elapsed time: {}, score: {}, best: {}".format(global_step, time_str,
-                                                                                       round(score, 2),
-                                                                                       round(best_score, 2)))
-                    write_logs(model_id, global_step, cur_time-start_time, score)
+                    # provide feedback about iteration, elapsed time, current performance
+                    if q_iteration == 1:
+                        start_time = time.time()
+
+                    if q_iteration % FLAGS.checkpoint_frequency == 0 and global_step > 0:
+                        score = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
+                        cur_time = time.time()
+                        m, s = divmod(cur_time-start_time, 60)
+                        h, m = divmod(m, 60)
+                        time_str = "%d:%02d:%02d" % (h, m, s)
+                        # check if score is best so far and update model file(s)
+                        is_highest = score > best_score
+                        if FLAGS.use_checkpoints:
+                            agent.save_checkpoint(q_iteration, is_highest)
+                        if is_highest:
+                            best_score = score
+                        print("iteration {}, elapsed time: {}, score: {}, best: {}".format(q_iteration, time_str,
+                                                                                           round(score, 2),
+                                                                                           round(best_score, 2)))
+                        write_logs(model_id, q_iteration, cur_time-start_time, score)
 
                 global_step += 1
 
@@ -157,8 +158,8 @@ def main(argv):
 
     # save final state of model
     if FLAGS.use_checkpoints:
-        agent.save_checkpoint(global_step)
-        print("Latest checkpoint at iteration {}".format(global_step))
+        agent.save_checkpoint(q_iteration)
+        print("Latest checkpoint at iteration {}".format(q_iteration))
 
     env.close()
     env_test.close()
