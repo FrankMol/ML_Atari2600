@@ -125,13 +125,13 @@ def main(argv):
                 memory.add_experience(action, frame, reward, terminal)
 
                 # Sample mini batch from memory and fit model
-                if global_step % FLAGS.update_frequency == 0 and global_step > FLAGS.memory_start_size:
+                if global_step % FLAGS.update_frequency == 0 and global_step > 0:
                     batch = memory.get_minibatch()
                     agent.fit_batch(batch)
                     q_iteration += 1
 
                 # provide feedback about iteration, elapsed time, current performance
-                if global_step % FLAGS.checkpoint_frequency == 0 and global_step > FLAGS.memory_start_size:
+                if global_step % FLAGS.checkpoint_frequency == 0 and global_step > 0:
                     score = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
                     cur_time = time.time()
                     m, s = divmod(cur_time-start_time, 60)
