@@ -116,6 +116,7 @@ class AtariAgent:
         """
 
         start_states, actions, rewards, next_states, is_terminal = batch
+        start_states = start_states.astype(float)
 
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
