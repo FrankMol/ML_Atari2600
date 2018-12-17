@@ -2,14 +2,14 @@
 # coding: utf-8
 
 # In[ ]:
-
+import gym
 
 import keras
 import numpy as np
 import os
 import os.path
 import json
-import gym
+
 from tensorflow import flags
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -35,6 +35,16 @@ class PolicyGradientAgent:
         if os.path.exists(self.model_name + '.h5'):
             # load model and parameters
             self.model = keras.models.load_model(self.model_name + '.h5')
+            self.model_train = keras.models.load_model(self.model_name + '_train.h5', custom_objects={loss: self.m_loss(episode_reward)})
+            frames_inputs = keras.layers.Input(shape=ATARI_SHAPE)
+            channeled_input = keras.layers.Reshape((80,80,1))(frames_inputs)
+            episode_reward = keras.layers.Input(shape=(1,),name='episode_reward')
+            self.model_train = keras.models.Model(inputs=[frames_inputs,episode_reward],outputs=softmax_output)
+
+            optimizer = keras.optimizers.RMSprop(lr=0.0001)
+            self.model_train.compile(optimizer=optimizer,loss=self.m_loss(episode_reward),)
+            
+            
             self.load_parameters(self.model_name + '.json')
             print("\nLoaded model '{}'".format(model_id))
         else:
@@ -79,9 +89,9 @@ class PolicyGradientAgent:
         
         frames_inputs = keras.layers.Input(shape=ATARI_SHAPE)
         channeled_input = keras.layers.Reshape((80,80,1))(frames_inputs) # Conv2D requries (batch, height, width, channels)  so we need to create a dummy channel 
-        conv_1 = keras.layers.Conv2D(filters=10,kernel_size=20,padding='valid',activation='relu',strides=(4,4),use_bias=False)(channeled_input)
-        conv_2 = keras.layers.Conv2D(filters=20,kernel_size=10,padding='valid',activation='relu',strides=(2,2),use_bias=False)(conv_1)
-        conv_3 = keras.layers.Conv2D(filters=40,kernel_size=3,padding='valid',activation='relu',use_bias=False)(conv_2)
+        conv_1 = keras.layers.Conv2D(filters=5,kernel_size=20,padding='valid',activation='relu',strides=(4,4),use_bias=False)(channeled_input)
+        conv_2 = keras.layers.Conv2D(filters=5,kernel_size=10,padding='valid',activation='relu',strides=(2,2),use_bias=False)(conv_1)
+        conv_3 = keras.layers.Conv2D(filters=10,kernel_size=3,padding='valid',activation='relu',use_bias=False)(conv_2)
         flattened_layer = keras.layers.Flatten()(conv_3)
         softmax_output = keras.layers.Dense(4,activation='softmax',use_bias=False)(flattened_layer)
         self.model = keras.models.Model(inputs=frames_inputs,outputs=softmax_output)
