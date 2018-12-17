@@ -5,6 +5,7 @@ env_test = gym.make('BreakoutDeterministic-v4')
 
 from atari_agent import AtariAgent
 from atari_preprocessing import preprocess
+from atari_controller import AtariController
 import numpy as np
 import os
 import sys
@@ -63,26 +64,38 @@ def main(argv):
         print("Give valid model name as first command line argument")
         exit(1)
 
-    # get initial state
-    state = get_start_state(env)
+    # instantiate controller object
+    controller = AtariController(env)
 
-    # play single episode to get score
-    score = play_episode(env, agent)
-    if score == -1:
-        print("Agent did not finish episode within {} steps".format(MAX_STEPS))
-        return
-    else:
-        print("Agent performance: {}".format(int(score)))
 
     try:
+        no_op = 1
+        score = 0
+        total_score = 0
+        n_episodes = 0
         while True:
-            frame, reward, is_done, _ = env.step(agent.choose_action(state, 0))
+            if no_op:
+                action = 1
+            else:
+                action = agent.choose_action(controller.get_state(), 0)
+
+            _, reward, is_done, life_lost = controller.step(action)
             env.render()
-            state = update_state(state, frame)
+
+            # update score
+            score += reward
 
             if is_done:
-                env.reset()
+                controller.reset()
                 env.render()
+                total_score += score
+                n_episodes += 1
+                print("Episode {}: Score = {}, avg score = {}".format(n_episodes, score, total_score/n_episodes))
+                score = 0
+                no_op = 1
+
+            if life_lost:
+                no_op = 1
 
             time.sleep(0.1)
 
