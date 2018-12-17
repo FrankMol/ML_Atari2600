@@ -1,0 +1,20 @@
+Inlog:
+ssh -X STUDENTNUMMER@peregrine.hpc.rug.nl
+
+Modules laden:
+module load Python/3.6.4-foss-2018a
+module load CUDA/9.1.85
+module load cuDNN/7.1.4.18-CUDA-9.0.176
+
+Github archive laden
+
+pas jobscript aan, zie laatste regel in jobscript voor het runnen van je python script
+
+Runnen van je script, info en stoppen script:
+sbatch jobscript
+jobinfo (jobnummer)
+scancel (jobnummer)
+
+Zie command line output in het slurmbestand met bijbehorden jobnummer. Openen met nano:
+nano slurm-3228869.out
+
