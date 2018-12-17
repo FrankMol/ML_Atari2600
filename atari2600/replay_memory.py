@@ -5,7 +5,7 @@ import random
 class ReplayMemory:
     """Replay Memory that stores the last size=1,000,000 transitions"""
 
-    def __init__(self, size=1000000, frame_height=80, frame_width=80,
+    def __init__(self, size=1000000, frame_height=105, frame_width=80,
                  agent_history_length=4, batch_size=32):
         """
         Args:

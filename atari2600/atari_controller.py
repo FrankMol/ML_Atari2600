@@ -1,7 +1,7 @@
 import numpy as np
 from atari_preprocessing import preprocess
 
-ATARI_SHAPE = (80, 80, 4)
+ATARI_SHAPE = (105, 80, 4)
 
 
 class AtariController:
