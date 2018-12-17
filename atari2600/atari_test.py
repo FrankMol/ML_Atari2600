@@ -16,6 +16,7 @@ ATARI_SHAPE = (80, 80, 4)  # tensor flow backend -> channels last
 # FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 MAX_STEPS = 1000
+EVAL_EPS = 0.0
 
 
 def update_state(state, frame):
@@ -66,7 +67,7 @@ def main(argv):
 
     # instantiate controller object
     controller = AtariController(env)
-
+    controller.reset()
 
     try:
         no_op = 1
@@ -76,8 +77,9 @@ def main(argv):
         while True:
             if no_op:
                 action = 1
+                no_op -= 1
             else:
-                action = agent.choose_action(controller.get_state(), 0)
+                action = agent.choose_action(controller.get_state(), EVAL_EPS)
 
             _, reward, is_done, life_lost = controller.step(action)
             env.render()
