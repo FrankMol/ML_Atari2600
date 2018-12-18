@@ -1,0 +1,23 @@
+{
+    "final_epsilon": 0.1,
+    "annealing_steps": 1000000,
+    "sq_gradient_momentum": 0.95,
+    "memory_size": 1000000,
+    "checkpoint_frequency": 10000,
+    "no_op_max": 10,
+    "eval_steps": 10000,
+    "agent_history": 4,
+    "batch_size": 32,
+    "discount_factor": 0.99,
+    "memory_start_size": 50000,
+    "eval_epsilon": 0.05,
+    "learning_rate": 0.00025,
+    "initial_epsilon": 1.0,
+    "no_op_action": 0,
+    "min_sq_gradient": 0.01,
+    "max_iterations": 20000000,
+    "gradient_momentum": 0.95,
+    "update_frequency": 1,
+    "use_checkpoints": true,
+    "iteration": 3570000
+}
