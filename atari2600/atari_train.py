@@ -2,25 +2,26 @@
 import gym
 
 # make env before importing tensorflow, otherwise it will not load for some reason
-env_train = gym.make('PongDeterministic-v4')  # training environment
-env_test = gym.make('PongDeterministic-v4')  # test environment
+ENV_ID = "BreakoutDeterministic-v4"
+env_train = gym.make(ENV_ID)  # training environment
+env_test = gym.make(ENV_ID)  # evaluation environment
 
 import numpy as np
 import os
 import sys
-import random
 import time
 import csv
+import random
+from replay_memory import ReplayMemory
 from atari_agent import AtariAgent
-from atari_preprocessing import preprocess
-from collections import deque
+from atari_controller import AtariController
 from tensorflow import flags
 from datetime import datetime
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 default_model_name = "untitled_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
-ATARI_SHAPE = (80, 80, 4)  # tensor flow backend -> channels last
+ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 
@@ -34,58 +35,44 @@ flags.DEFINE_integer('memory_start_size', 50000, "number of states with which th
 flags.DEFINE_integer('agent_history', 4, "number of frames in each state")
 flags.DEFINE_float('initial_epsilon', 1, "initial value of epsilon used for exploration of state space")
 flags.DEFINE_float('final_epsilon', 0.1, "final value of epsilon used for exploration of state space")
-flags.DEFINE_float('eval_epsilon', 0.0, "value of epsilon used in epsilon-greedy policy evaluation")
+flags.DEFINE_float('eval_epsilon', 0.05, "value of epsilon used in epsilon-greedy policy evaluation")
 flags.DEFINE_integer('eval_steps', 10000, "number of evaluation steps used to evaluate performance")
 flags.DEFINE_integer('annealing_steps', 1000000, "frame at which final exploration reached")  # LET OP: frame/q?
 flags.DEFINE_integer('no_op_max', 10, "max number of do nothing actions at beginning of episode")
 flags.DEFINE_integer('no_op_action', 0, "action that the agent plays as no-op at beginning of episode")
-flags.DEFINE_integer('update_frequency', 4, "number of actions played by agent between each q-iteration")
+flags.DEFINE_integer('update_frequency', 1, "number of actions played by agent between each q-iteration")
 flags.DEFINE_integer('iteration', 0, "iteration at which training should start or resume")
 
 
-def get_epsilon_for_iteration(iteration):
-    epsilon = max(FLAGS.final_epsilon, FLAGS.initial_epsilon - (FLAGS.initial_epsilon - FLAGS.final_epsilon)
-                  / FLAGS.annealing_steps * iteration)
-    return epsilon
-
-
-def update_state(state, frame):
-    frame = preprocess(frame)
-    frame = np.reshape([frame], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], 1))
-    next_state = np.append(frame, state[:, :, :, :3], axis=3)
-    return next_state
-
-
-# reset environment and get first state
-def get_start_state(env):
-    frame = env.reset()
-    frame = preprocess(frame)
-    state = np.stack((frame, frame, frame, frame), axis=2)
-    state = np.reshape([state], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], ATARI_SHAPE[2]))
-    return state
-
-
-def evaluate_model(env, agent, n_steps=FLAGS.eval_steps):
+def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
     episode_cnt = 0
     score = 0
     evaluation_score = 0
-    no_op = random.randrange(FLAGS.no_op_max + 1)  # also use no-op in evaluation!
-    state = get_start_state(env)
+    controller.reset()
+    no_op = True
     for _ in range(n_steps):
         if no_op > 0:
-            action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else env.action_space.sample()
+            action = 1
             no_op -= 1
         else:
-            action = agent.choose_action(state, FLAGS.eval_epsilon)
-        frame, reward, is_done, _ = env.step(action)
-        state = update_state(state, frame)
+            action = agent.choose_action(controller.get_state(), FLAGS.eval_epsilon)
+        _, reward, is_done, life_lost = controller.step(action)
         score += reward
         if is_done:
             evaluation_score += score
             score = 0
-            state = get_start_state(env)
+            controller.reset()
             episode_cnt += 1
+            no_op = random.randrange(FLAGS.no_op_max+1)
+        if is_done or life_lost:
+            no_op = 1
     return evaluation_score/episode_cnt if episode_cnt > 0 else -1
+
+
+def get_epsilon(iteration):
+    epsilon = max(FLAGS.final_epsilon, FLAGS.initial_epsilon - (FLAGS.initial_epsilon - FLAGS.final_epsilon)
+                  / FLAGS.annealing_steps * iteration)
+    return epsilon
 
 
 def write_logs(model_id, iteration, seconds, score):
@@ -93,39 +80,6 @@ def write_logs(model_id, iteration, seconds, score):
     with open(file_name, 'a') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow([iteration, round(seconds), score])
-
-
-# create a replay memory in the form of a deque, and fill with a number of states
-def initialize_memory(env, agent):
-    # create memory object
-    memory = deque(maxlen=FLAGS.memory_size)
-
-    state = get_start_state(env)
-
-    # choose epsilon for initialization of memory, use iteration provided by flags
-    epsilon = get_epsilon_for_iteration(FLAGS.iteration)
-
-    print("Initializing replay memory with {} states...".format(FLAGS.memory_start_size))
-    no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
-    for i in range(FLAGS.memory_start_size):
-        if no_op > 0:
-            action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else env.action_space.sample()
-            no_op -= 1
-        else:
-            action = agent.choose_action(state, epsilon)
-
-        frame, reward, is_done, _ = env.step(action)
-        # clip reward
-        reward = np.sign(reward)
-        next_state = update_state(state, frame)
-        memory.append((state, action, reward, next_state, is_done))
-        state = next_state
-
-        if is_done:
-            env.reset()
-            no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
-    print("Replay memory initialized")
-    return memory
 
 
 def main(argv):
@@ -137,82 +91,77 @@ def main(argv):
     else:
         model_id = default_model_name
 
-    # instantiate agent
+
+    # instantiate agent, controller, memory
+    controller = AtariController(env)
+    evaluation_controller = AtariController(env_test)
+    memory = ReplayMemory()
     agent = AtariAgent(env, model_id)
 
-    # initialize replay memory and state
-    memory = initialize_memory(env, agent)
-    state = get_start_state(env)
-
-    iteration = FLAGS.iteration
-
+    # get start iteration (for resuming training on stored model)
+    global_step = FLAGS.iteration - FLAGS.memory_start_size
+    q_iteration = 0
     # start timer
     start_time = time.time()
-    if iteration == 0:
-        print("Starting training...")
-    else:
-        print("Resuming training at iteration {}...".format(iteration))
+
+    print("Initializing replay memory with {} states...".format(FLAGS.memory_start_size))
 
     # start training
-    no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
     best_score = -np.inf  # keeps track of best score reached, used for saving best-so-far model
     try:
-        while iteration < FLAGS.max_iterations:
+        while global_step < FLAGS.max_iterations:
 
-            # let the agent play a number of steps in the game
-            for i in range(FLAGS.update_frequency):
-                # Choose epsilon based on the iteration
-                epsilon = get_epsilon_for_iteration(iteration)
+            controller.reset()  # reset environment when done
+            is_done = False
 
+            while not is_done:
                 # Choose the action -> do nothing at beginning of new episode
-                if no_op > 0:
-                    action = FLAGS.no_op_action if FLAGS.no_op_action >= 0 else env.action_space.sample()
-                    no_op -= 1
-                else:
-                    action = agent.choose_action(state, epsilon)
-                # Play one game iteration
-                frame, reward, is_done, _ = env.step(action)
-                # clip reward
-                reward = np.sign(reward)
-                # update state by adding new frame and removing oldest frame
-                next_state = update_state(state, frame)
-                # add state to memory
-                memory.append((state, action, reward, next_state, is_done))
+                action = agent.choose_action(controller.get_state(), get_epsilon(global_step))
 
-                # reset game if game over
-                if is_done:
-                    state = get_start_state(env)
-                    no_op = random.randrange(FLAGS.no_op_max+1)  # add 1 so that no_op_max can be set to 0
-                else:
-                    state = next_state
+                # interact with environment
+                frame, reward, is_done, life_lost = controller.step(action)
 
-            # Sample mini batch from memory and fit model
-            batch = random.sample(memory, FLAGS.batch_size)
-            agent.fit_batch(batch)
+                # add current experience to replay memory. both game over and dead are considered terminal states
+                terminal = is_done or life_lost
+                memory.add_experience(action, frame, reward, terminal)
 
-            # provide feedback about iteration, elapsed time, current performance
-            if iteration % FLAGS.checkpoint_frequency == 0 and not iteration == FLAGS.iteration:
-                score = evaluate_model(env, agent)  # play complete test episode to rate performance
-                cur_time = time.time()
-                m, s = divmod(cur_time-start_time, 60)
-                h, m = divmod(m, 60)
-                time_str = "%d:%02d:%02d" % (h, m, s)
-                # check if score is best so far and update model file(s)
-                is_highest = score > best_score
-                agent.save_checkpoint(iteration, is_highest)
-                if is_highest:
-                    best_score = score
-                print("iteration {}, elapsed time: {}, score: {}, best: {}".format(iteration, time_str, round(score, 2),
-                                                                                   round(best_score, 2)))
-                write_logs(model_id, iteration, cur_time-start_time, score)
+                # Sample mini batch from memory and fit model
+                if global_step % FLAGS.update_frequency == 0 and global_step > 0:
+                    batch = memory.get_minibatch()
+                    agent.fit_batch(batch)
+                    q_iteration += 1
 
-            iteration += 1
+                # provide feedback about iteration, elapsed time, current performance
+                if q_iteration == 1:
+                    start_time = time.time()
+                    print("Starting training...")
+
+                if global_step % FLAGS.checkpoint_frequency == 0 and global_step > 0:
+                    score = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
+                    cur_time = time.time()
+                    m, s = divmod(cur_time-start_time, 60)
+                    h, m = divmod(m, 60)
+                    time_str = "%d:%02d:%02d" % (h, m, s)
+                    # check if score is best so far and update model file(s)
+                    is_highest = score > best_score
+                    if FLAGS.use_checkpoints:
+                        agent.save_checkpoint(global_step, is_highest)
+                    if is_highest:
+                        best_score = score
+                    print("iteration {}, elapsed time: {}, score: {}, best: {}".format(global_step, time_str,
+                                                                                       round(score, 2),
+                                                                                       round(best_score, 2)))
+                    write_logs(model_id, global_step, cur_time-start_time, score)
+
+                global_step += 1
+
     except KeyboardInterrupt:
         print("\nTraining stopped by user")
 
     # save final state of model
-    agent.save_checkpoint(iteration)
-    print("Latest checkpoint at iteration {}".format(iteration))
+    if FLAGS.use_checkpoints:
+        agent.save_checkpoint(global_step)
+        print("Latest checkpoint at iteration {}".format(global_step))
 
     env.close()
     env_test.close()
