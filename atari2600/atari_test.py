@@ -6,10 +6,12 @@ env_test = gym.make('BreakoutDeterministic-v4')
 from atari_agent import AtariAgent
 from atari_preprocessing import preprocess
 from atari_controller import AtariController
+from skimage.transform import resize
 import numpy as np
 import os
 import sys
 import time
+import imageio
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 ATARI_SHAPE = (80, 80, 4)  # tensor flow backend -> channels last
@@ -17,6 +19,8 @@ ATARI_SHAPE = (80, 80, 4)  # tensor flow backend -> channels last
 MODEL_PATH = 'trained_models/'
 MAX_STEPS = 1000
 EVAL_EPS = 0.0
+
+GIF_PATH = 'gifs/'
 
 
 def update_state(state, frame):
@@ -54,6 +58,23 @@ def play_episode(env, agent):
         return -1
 
 
+def generate_gif(frames_for_gif, score, path=GIF_PATH):
+    """
+        Args:
+            frame_number: Integer, determining the number of the current frame
+            frames_for_gif: A sequence of (210, 160, 3) frames of an Atari game in RGB
+            reward: Integer, Total reward of the episode that is ouputted as a gif
+            path: String, path where gif is saved
+    """
+    if not os.path.exists(path):
+        os.mkdir(path)
+    for idx, frame_idx in enumerate(frames_for_gif):
+        frames_for_gif[idx] = resize(frame_idx, (420, 320, 3),
+                                     preserve_range=True, order=0).astype(np.uint8)
+
+    imageio.mimsave(f'{path}{"ATARI_score_{}.gif".format(score)}',
+                    frames_for_gif, duration=1 / 20)
+
 def main(argv):
 
     env = env_test
@@ -72,8 +93,10 @@ def main(argv):
     try:
         no_op = 1
         score = 0
+        best_score = 0
         total_score = 0
         n_episodes = 0
+        gif_frames = []
         while True:
             if no_op:
                 action = 1
@@ -81,8 +104,11 @@ def main(argv):
             else:
                 action = agent.choose_action(controller.get_state(), EVAL_EPS)
 
-            _, reward, is_done, life_lost = controller.step(action)
+            _, reward, is_done, life_lost, gif_frame = controller.step(action)
             env.render()
+
+            # add frame to gif
+            gif_frames.append(gif_frame)
 
             # update score
             score += reward
@@ -93,6 +119,12 @@ def main(argv):
                 total_score += score
                 n_episodes += 1
                 print("Episode {}: Score = {}, avg score = {}".format(n_episodes, score, total_score/n_episodes))
+                if score > best_score:
+                    # save gif
+                    generate_gif(gif_frames, score)
+                    # update best score
+                    best_score = score
+                gif_frames = []
                 score = 0
                 no_op = 1
 
