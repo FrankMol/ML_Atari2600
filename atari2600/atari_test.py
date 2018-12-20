@@ -14,7 +14,7 @@ import time
 import imageio
 
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
-ATARI_SHAPE = (80, 80, 4)  # tensor flow backend -> channels last
+ATARI_SHAPE = (84, 84, 4)  # tensor flow backend -> channels last
 # FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 MAX_STEPS = 1000
@@ -104,11 +104,11 @@ def main(argv):
             else:
                 action = agent.choose_action(controller.get_state(), EVAL_EPS)
 
-            _, reward, is_done, life_lost, gif_frame = controller.step(action)
+            raw_frame, reward, is_done, life_lost = controller.step(action, evaluation=True)
             # env.render()
 
             # add frame to gif
-            gif_frames.append(gif_frame)
+            gif_frames.append(raw_frame)
 
             # update score
             score += reward

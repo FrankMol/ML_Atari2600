@@ -1,7 +1,7 @@
 import numpy as np
 from atari_preprocessing import preprocess
 
-ATARI_SHAPE = (105, 80, 4)
+ATARI_SHAPE = (84, 84, 4)
 
 
 class AtariController:
@@ -20,22 +20,25 @@ class AtariController:
         self.state = np.repeat(frame, self.agent_history_length, axis=3)
         return
 
-    def step(self, action):
-        frame, reward, is_done, info = self.env.step(action)
+    def step(self, action, evaluation=False):
+        raw_frame, reward, is_done, info = self.env.step(action)
 
         # check if life lost
         life_lost = True if info['ale.lives'] < self.lives else False
         self.lives = info['ale.lives']
 
         # preprocess frame
-        original_frame = np.copy(frame)
-        frame = preprocess(frame)
+        frame = preprocess(raw_frame)
         state_frame = np.reshape([frame], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], 1))
         self.state = np.append(self.state[:, :, :, 1:], state_frame, axis=3)
         # clip reward
         # reward = np.sign(reward)
 
-        return frame, reward, is_done, life_lost, original_frame
+        # return raw frame when evaluating, for making gif
+        if evaluation:
+            return raw_frame, reward, is_done, life_lost
+        else:
+            return frame, reward, is_done, life_lost
 
     def get_state(self):
         return self.state

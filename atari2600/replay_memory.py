@@ -5,7 +5,7 @@ import random
 class ReplayMemory:
     """Replay Memory that stores the last size=1,000,000 transitions"""
 
-    def __init__(self, size=1000000, frame_height=105, frame_width=80,
+    def __init__(self, size=1000000, frame_height=84, frame_width=84,
                  agent_history_length=4, batch_size=32):
         """
         Args:
@@ -45,6 +45,7 @@ class ReplayMemory:
             reward: A float determining the reward the agend received for performing an action
             terminal: A bool stating whether the episode terminated
         """
+        print(frame.shape)
         if frame.shape != (self.frame_height, self.frame_width):
             raise ValueError('Dimension of frame is wrong!')
         self.actions[self.current] = action
