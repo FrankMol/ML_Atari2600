@@ -45,7 +45,6 @@ class ReplayMemory:
             reward: A float determining the reward the agend received for performing an action
             terminal: A bool stating whether the episode terminated
         """
-        print(frame.shape)
         if frame.shape != (self.frame_height, self.frame_width):
             raise ValueError('Dimension of frame is wrong!')
         self.actions[self.current] = action
