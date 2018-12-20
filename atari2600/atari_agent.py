@@ -5,10 +5,11 @@ import os
 import os.path
 import json
 from tensorflow import flags
+from keras import backend as K
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-ATARI_SHAPE = (84, 84, 4)  # tensor flow backend -> channels last
+ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 
@@ -25,10 +26,14 @@ class AtariAgent:
     def __init__(self, env, model_id):
         self.n_actions = env.action_space.n
         self.model_name = os.path.join(MODEL_PATH, model_id)
+        self.model = None
+        self.target_model = None
 
         if os.path.exists(self.model_name + '.h5'):
             # load model and parameters
-            self.model = keras.models.load_model(self.model_name + '.h5')
+            self.model = keras.models.load_model(self.model_name + '.h5',
+                                                 custom_objects={'huber_loss': self.huber_loss})
+            self.target_model = keras.models.clone_model(self.model)
             self.load_parameters(self.model_name + '.json')
             print("\nLoaded model '{}'".format(model_id))
         else:
@@ -90,7 +95,19 @@ class AtariAgent:
         optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
                                              rho=FLAGS.gradient_momentum,
                                              epsilon=FLAGS.min_sq_gradient)
-        self.model.compile(optimizer, loss='mse')
+        self.model.compile(optimizer, loss=self.huber_loss)
+        # set up the target model
+        self.target_model = keras.models.clone_model(self.model)
+        self.clone_target_model()
+
+    def huber_loss(self, a, b, in_keras=True):
+        error = a - b
+        quadratic_term = error * error / 2
+        linear_term = abs(error) - 1 / 2
+        use_linear_term = (abs(error) > 1.0)
+        if in_keras:
+            use_linear_term = K.cast(use_linear_term, 'float32')
+        return use_linear_term * linear_term + (1 - use_linear_term) * quadratic_term
 
     def get_one_hot(self, targets):
         return np.eye(self.n_actions)[np.array(targets).reshape(-1)]
@@ -100,6 +117,7 @@ class AtariAgent:
 
         Params:
         - model: The DQN
+        - target_model the target DQN
         - gamma: Discount factor (should be 0.99)
         - start_states: numpy array of starting states
         - actions: numpy array of one-hot encoded actions corresponding to the start states
@@ -114,7 +132,7 @@ class AtariAgent:
 
         # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
-        next_q_values = self.model.predict([next_states, actions_mask])
+        next_q_values = self.target_model.predict([next_states, actions_mask])
         # next_Q_values = model.predict([next_states, np.expand_dims(np.ones(actions.shape), axis=0)])
         # The Q values of the terminal states is 0 by definition, so override them
         next_q_values[is_terminal] = 0
@@ -144,3 +162,6 @@ class AtariAgent:
         if new_best:
             self.model.save(self.model_name + '_best.h5')
             self.write_iteration(self.model_name + '_best.json', iteration)
+
+    def clone_target_model(self):
+        self.target_model.set_weights(self.model.get_weights())

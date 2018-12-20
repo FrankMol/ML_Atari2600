@@ -21,7 +21,7 @@ from datetime import datetime
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 default_model_name = "untitled_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
-ATARI_SHAPE = (84, 84, 4)  # tensor flow backend -> channels last
+ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 
@@ -42,6 +42,7 @@ flags.DEFINE_integer('no_op_max', 10, "max number of do nothing actions at begin
 flags.DEFINE_integer('no_op_action', 0, "action that the agent plays as no-op at beginning of episode")
 flags.DEFINE_integer('update_frequency', 1, "number of actions played by agent between each q-iteration")
 flags.DEFINE_integer('iteration', 0, "iteration at which training should start or resume")
+flags.DEFINE_integer('target_update_frequency', 10000, "number of iterations after which target model is updated")
 
 
 def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
@@ -134,7 +135,10 @@ def main(argv):
                     if q_iteration == 1:
                         start_time = time.time()
                         print("Starting training...")
-                    
+
+                if global_step % FLAGS.target_update_frequency == 0:
+                    agent.clone_target_model()
+
                 # provide feedback about iteration, elapsed time, current performance
                 if global_step % FLAGS.checkpoint_frequency == 0 and global_step > 0:
                     score = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance

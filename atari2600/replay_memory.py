@@ -1,12 +1,13 @@
 import numpy as np
 import random
 
+ATARI_SHAPE = (105, 80, 4)
 
 class ReplayMemory:
     """Replay Memory that stores the last size=1,000,000 transitions"""
 
-    def __init__(self, size=1000000, frame_height=84, frame_width=84,
-                 agent_history_length=4, batch_size=32):
+    def __init__(self, size=1000000, frame_height=ATARI_SHAPE[0], frame_width=ATARI_SHAPE[1],
+                 agent_history_length=ATARI_SHAPE[2], batch_size=32):
         """
         Args:
             size: Integer, Number of stored transitions
