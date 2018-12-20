@@ -12,14 +12,14 @@ def downsample(img):
 
 def use8484(img):
     img = rgb2gray(img)[34:34+160, 0:160]
-    print(img.shape)
+    # print(img.shape)
     img = np.uint8(resize(img, (84, 84), order=0) * 255)
-    print(img)
-    print(type(img[0, 0]))
-    print(img.shape)
-    plt.figure()
-    plt.imshow(img, cmap='gray')
-    plt.show()
+    # print(img)
+    # print(type(img[0, 0]))
+    # print(img.shape)
+    # plt.figure()
+    # plt.imshow(img, cmap='gray')
+    # plt.show()
     # exit
     return img
 
