@@ -18,7 +18,7 @@ ATARI_SHAPE = (80, 80, 4)  # tensor flow backend -> channels last
 # FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 MAX_STEPS = 1000
-EVAL_EPS = 0.0
+EVAL_EPS = 0.05
 
 GIF_PATH = 'gifs/'
 
@@ -70,9 +70,9 @@ def generate_gif(frames_for_gif, score, path=GIF_PATH):
         os.mkdir(path)
     for idx, frame_idx in enumerate(frames_for_gif):
         frames_for_gif[idx] = resize(frame_idx, (420, 320, 3),
-                                     preserve_range=True, order=0).astype(np.uint8)
+                                     mode='constant', preserve_range=True, order=0).astype(np.uint8)
 
-    imageio.mimsave(f'{path}{"ATARI_score_{}.gif".format(score)}',
+    imageio.mimsave(os.path.join(path,"ATARI_score_{}.gif".format(score)),
                     frames_for_gif, duration=1 / 20)
 
 def main(argv):
@@ -105,7 +105,7 @@ def main(argv):
                 action = agent.choose_action(controller.get_state(), EVAL_EPS)
 
             _, reward, is_done, life_lost, gif_frame = controller.step(action)
-            env.render()
+            # env.render()
 
             # add frame to gif
             gif_frames.append(gif_frame)
@@ -115,7 +115,7 @@ def main(argv):
 
             if is_done:
                 controller.reset()
-                env.render()
+                # env.render()
                 total_score += score
                 n_episodes += 1
                 print("Episode {}: Score = {}, avg score = {}".format(n_episodes, score, total_score/n_episodes))
@@ -131,7 +131,7 @@ def main(argv):
             if life_lost:
                 no_op = 1
 
-            time.sleep(0.1)
+            # time.sleep(0.1)
 
     except KeyboardInterrupt:
         pass
