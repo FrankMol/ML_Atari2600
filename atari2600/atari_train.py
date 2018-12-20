@@ -131,11 +131,11 @@ def main(argv):
                     agent.fit_batch(batch)
                     q_iteration += 1
 
+                    if q_iteration == 1:
+                        start_time = time.time()
+                        print("Starting training...")
+                    
                 # provide feedback about iteration, elapsed time, current performance
-                if q_iteration == 1:
-                    start_time = time.time()
-                    print("Starting training...")
-
                 if global_step % FLAGS.checkpoint_frequency == 0 and global_step > 0:
                     score = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
                     cur_time = time.time()
