@@ -136,7 +136,7 @@ def main(argv):
                         start_time = time.time()
                         print("Starting training...")
 
-                if global_step % FLAGS.target_update_frequency == 0:
+                if global_step % FLAGS.target_update_frequency == 0 and global_step > 0:
                     agent.clone_target_model()
 
                 # provide feedback about iteration, elapsed time, current performance

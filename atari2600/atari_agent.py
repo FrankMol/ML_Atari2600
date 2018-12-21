@@ -5,7 +5,7 @@ import os
 import os.path
 import json
 from tensorflow import flags
-from keras import backend as K
+from huber_loss import huber_loss
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -32,8 +32,9 @@ class AtariAgent:
         if os.path.exists(self.model_name + '.h5'):
             # load model and parameters
             self.model = keras.models.load_model(self.model_name + '.h5',
-                                                 custom_objects={'huber_loss': self.huber_loss})
-            self.target_model = keras.models.clone_model(self.model)
+                                                 custom_objects={'huber_loss': huber_loss})
+            # self.target_model = keras.models.clone_model(self.model)
+            self.clone_target_model()
             self.load_parameters(self.model_name + '.json')
             print("\nLoaded model '{}'".format(model_id))
         else:
@@ -95,19 +96,10 @@ class AtariAgent:
         optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
                                              rho=FLAGS.gradient_momentum,
                                              epsilon=FLAGS.min_sq_gradient)
-        self.model.compile(optimizer, loss=self.huber_loss)
+        self.model.compile(optimizer, loss=huber_loss)
         # set up the target model
-        self.target_model = keras.models.clone_model(self.model)
+        # self.target_model = keras.models.clone_model(self.model)
         self.clone_target_model()
-
-    def huber_loss(self, a, b, in_keras=True):
-        error = a - b
-        quadratic_term = error * error / 2
-        linear_term = abs(error) - 1 / 2
-        use_linear_term = (abs(error) > 1.0)
-        if in_keras:
-            use_linear_term = K.cast(use_linear_term, 'float32')
-        return use_linear_term * linear_term + (1 - use_linear_term) * quadratic_term
 
     def get_one_hot(self, targets):
         return np.eye(self.n_actions)[np.array(targets).reshape(-1)]
@@ -164,4 +156,7 @@ class AtariAgent:
             self.write_iteration(self.model_name + '_best.json', iteration)
 
     def clone_target_model(self):
-        self.target_model.set_weights(self.model.get_weights())
+        self.model.save(self.model_name + '_tmp.h5')
+        self.target_model = keras.models.load_model(self.model_name + '_tmp.h5',
+                                                    custom_objects={'huber_loss': huber_loss})
+        # self.target_model.set_weights(self.model.get_weights())
