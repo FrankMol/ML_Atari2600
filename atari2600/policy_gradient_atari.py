@@ -14,9 +14,7 @@ import time
 # In[2]:
 
 
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-get_ipython().run_line_magic('matplotlib', 'inline')
+
 
 
 # In[3]:
