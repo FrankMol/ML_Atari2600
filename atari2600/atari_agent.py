@@ -98,8 +98,7 @@ class AtariAgent:
                                              epsilon=FLAGS.min_sq_gradient)
         self.model.compile(optimizer, loss=huber_loss)
         # set up the target model
-        # self.target_model = keras.models.clone_model(self.model)
-        self.clone_target_model()
+        self.target_model = keras.models.clone_model(self.model)
 
     def get_one_hot(self, targets):
         return np.eye(self.n_actions)[np.array(targets).reshape(-1)]
@@ -156,7 +155,4 @@ class AtariAgent:
             self.write_iteration(self.model_name + '_best.json', iteration)
 
     def clone_target_model(self):
-        self.model.save(self.model_name + '_tmp.h5')
-        self.target_model = keras.models.load_model(self.model_name + '_tmp.h5',
-                                                    custom_objects={'huber_loss': huber_loss})
-        # self.target_model.set_weights(self.model.get_weights())
+        self.target_model.set_weights(self.model.get_weights())
