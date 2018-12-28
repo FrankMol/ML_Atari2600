@@ -6,6 +6,11 @@ import os.path
 import json
 from tensorflow import flags
 from huber_loss import huber_loss
+from keras.models import Sequential
+from keras.layers import Dense, Flatten
+from keras.layers.convolutional import Conv2D
+from keras.optimizers import RMSprop, Adam
+from keras import backend as K
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -26,23 +31,17 @@ class AtariAgent:
     def __init__(self, env, model_id):
         self.n_actions = env.action_space.n
         self.model_name = os.path.join(MODEL_PATH, model_id)
-        self.model = None
-        self.target_model = None
 
-        if os.path.exists(self.model_name + '.h5'):
-            # load model and parameters
-            self.model = keras.models.load_model(self.model_name + '.h5',
-                                                 custom_objects={'huber_loss': huber_loss})
-            self.target_model = keras.models.clone_model(self.model)
-            self.clone_target_model()
-            self.load_parameters(self.model_name + '.json')
-            print("\nLoaded model '{}'".format(model_id))
-        else:
-            # make new model
-            self.build_model()
-            if FLAGS.use_checkpoints:
-                self.save_checkpoint(0)
-            print("\nCreated new model with name '{}'".format(model_id))
+
+        self.q_model = self.build_q_model()
+        self.v_model = self.build_v_model()
+        self.target_v_model = self.build_v_model()
+
+        self.optimizer = self.optimizer()
+
+        if FLAGS.use_checkpoints:
+            self.save_checkpoint(0)
+        print("\nCreated new model with name '{}'".format(model_id))
 
     def write_parameters(self, config_file):
         items = FLAGS.flag_values_dict()
@@ -68,37 +67,56 @@ class AtariAgent:
         with open(config_file, "w+") as f:
             f.write(json.dumps(items, indent=4))
 
-    def build_model(self):
+    def build_q_model(self):
+        model = Sequential()
+        model.add(Conv2D(32, (8, 8), strides=(4, 4),
+                         activation='relu', input_shape=ATARI_SHAPE))
+        model.add(Conv2D(64, (4, 4), strides=(2, 2), activation='relu'))
+        model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu'))
+        model.add(Flatten())
+        model.add(Dense(512, activation='relu'))
+        model.add(Dense(self.n_actions))
+        #model.compile(loss='mse', optimizer=RMSprop(lr=self.learning_rate, rho=0.95, epsilon=0.01))
 
-        # With the functional API we need to define the inputs.
-        frames_input = keras.layers.Input(ATARI_SHAPE, name='frames')
-        actions_input = keras.layers.Input((self.n_actions,), name='mask')
+        return model
 
-        # Assuming that the input frames are still encoded from 0 to 255. Transforming to [0, 1].
-        normalized = keras.layers.Lambda(lambda x: x / 255.0)(frames_input)
+    def build_v_model(self):
+        model = Sequential()
+        model.add(Conv2D(32, (8, 8), strides=(4, 4),
+                         activation='relu', input_shape=ATARI_SHAPE))
+        model.add(Conv2D(64, (4, 4), strides=(2, 2), activation='relu'))
+        model.add(Conv2D(64, (3, 3), strides=(1, 1), activation='relu'))
+        model.add(Flatten())
+        model.add(Dense(512, activation='relu'))
+        model.add(Dense(1))
+        model.compile(loss='mse', optimizer=RMSprop(
+            lr=FLAGS.learning_rate, rho=0.95, epsilon=0.01))
 
-        # "The first hidden layer convolves 16 8×8 filters with stride 4 with the input image and applies a rectifier nonlinearity."
-        conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4))(normalized)
+        return model
 
-        # "The second hidden layer convolves 32 4×4 filters with stride 2, again followed by a rectifier nonlinearity."
-        conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2))(conv_1)
-        # Flattening the second convolutional layer.
-        conv_flattened = keras.layers.core.Flatten()(conv_2)
-        # "The final hidden layer is fully-connected and consists of 256 rectifier units."
-        hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
-        # "The output layer is a fully-connected linear layer with a single output for each valid action."
-        output = keras.layers.Dense(self.n_actions)(hidden)
-        # Finally, we multiply the output by the mask!
-        filtered_output = keras.layers.merge.Multiply()([output, actions_input])
+    def optimizer(self):
 
-        self.model = keras.models.Model(inputs=[frames_input, actions_input], outputs=filtered_output)
+        a = K.placeholder(shape=(None,), dtype='int32')
+        y = K.placeholder(shape=(None,), dtype='float32')
 
-        optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
-                                             rho=FLAGS.gradient_momentum,
-                                             epsilon=FLAGS.min_sq_gradient)
-        self.model.compile(optimizer, loss=huber_loss)
-        # set up the target model
-        self.target_model = keras.models.clone_model(self.model)
+        py_x = self.q_model.output
+
+        a_one_hot = K.one_hot(a, self.n_actions)
+        q_value = K.sum(py_x * a_one_hot, axis=1)
+
+        error = K.abs(y - q_value)
+
+        quadratic_part = K.clip(error, 0.0, 1.0)
+        linear_part = error - quadratic_part
+
+        loss = K.mean(0.5 * K.square(quadratic_part) + linear_part)
+
+        optimizer = RMSprop(lr=0.00025, epsilon=0.01)
+        updates = optimizer.get_updates(
+            self.q_model.trainable_weights, [], loss)
+        train = K.function([self.q_model.input, a, y], [loss], updates=updates)
+
+        return train
 
     def get_one_hot(self, targets):
         return np.eye(self.n_actions)[np.array(targets).reshape(-1)]
@@ -121,21 +139,50 @@ class AtariAgent:
         start_states, actions, rewards, next_states, is_terminal = batch
         start_states = start_states.astype(np.float32)
 
-        # First, predict the Q values of the next states. Note how we are passing ones as the mask.
-        actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
-        next_q_values = self.target_model.predict([next_states, actions_mask])
-        # next_Q_values = model.predict([next_states, np.expand_dims(np.ones(actions.shape), axis=0)])
-        # The Q values of the terminal states is 0 by definition, so override them
-        next_q_values[is_terminal] = 0
-        # The Q values of each start state is the reward + gamma * the max next state Q
-        q_values = rewards + FLAGS.discount_factor * np.max(next_q_values, axis=1)
-        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
-        # the targets by the actions.
-        one_hot_actions = self.get_one_hot(actions)
-        self.model.fit(
-            [start_states, one_hot_actions], one_hot_actions * q_values[:, None],
-            epochs=1, batch_size=len(start_states), verbose=0
-        )
+        # # First, predict the Q values of the next states. Note how we are passing ones as the mask.
+        # actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
+        # next_q_values = self.target_model.predict([next_states, actions_mask])
+        # # next_Q_values = model.predict([next_states, np.expand_dims(np.ones(actions.shape), axis=0)])
+        # # The Q values of the terminal states is 0 by definition, so override them
+        # next_q_values[is_terminal] = 0
+        # # The Q values of each start state is the reward + gamma * the max next state Q
+        # q_values = rewards + FLAGS.discount_factor * np.max(next_q_values, axis=1)
+        # # Fit the keras model. Note how we are passing the actions as the mask and multiplying
+        # # the targets by the actions.
+        # one_hot_actions = self.get_one_hot(actions)
+        # self.v_model.fit(
+        #     [start_states, one_hot_actions], one_hot_actions * q_values[:, None],
+        #     epochs=1, batch_size=len(start_states), verbose=0
+        # )
+        #
+        #
+        #
+
+        v_target = np.zeros((len(start_states),))
+
+        q_target = self.q_model.predict(start_states)
+
+        v_target_value = self.target_v_model.predict(next_states)
+
+        q_targets = list()
+
+        for i in range(len(start_states)):
+
+            if is_terminal[i]:
+                v_target[i] = rewards[i]
+                q_target[i][actions[i]] = rewards[i]
+
+            else:
+                v_target[i] = rewards[i] + \
+                              FLAGS.discount_factor * v_target_value[i]
+                q_target[i][actions[i]] = rewards[i] + \
+                                         FLAGS.discount_factor * v_target_value[i]
+
+            q_targets.append(q_target[i][actions[i]])
+
+        loss = self.optimizer([start_states, actions, q_targets])
+
+        self.v_model.fit(start_states, v_target, epochs=1, verbose=0)
 
     def choose_action(self, state, epsilon):
         state = state.astype(np.float32)
@@ -143,16 +190,16 @@ class AtariAgent:
             action = random.randrange(self.n_actions)
         else:
             mask = np.ones(self.n_actions).reshape(1, self.n_actions)
-            q_values = self.model.predict([state, mask])
+            q_values = self.v_model.predict(state)
             action = np.argmax(q_values)
         return action
 
     def save_checkpoint(self, iteration, new_best=False):
-        self.model.save(self.model_name + '.h5')
+        self.v_model.save(self.model_name + '.h5')
         self.write_iteration(self.model_name + '.json', iteration)
         if new_best:
-            self.model.save(self.model_name + '_best.h5')
+            self.v_model.save(self.model_name + '_best.h5')
             self.write_iteration(self.model_name + '_best.json', iteration)
 
     def clone_target_model(self):
-        self.target_model.set_weights(self.model.get_weights())
+        self.target_v_model.set_weights(self.v_model.get_weights())
