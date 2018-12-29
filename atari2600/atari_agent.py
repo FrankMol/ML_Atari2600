@@ -32,7 +32,6 @@ class AtariAgent:
         self.n_actions = env.action_space.n
         self.model_name = os.path.join(MODEL_PATH, model_id)
 
-
         self.q_model = self.build_q_model()
         self.v_model = self.build_v_model()
         self.target_v_model = self.build_v_model()
@@ -76,7 +75,7 @@ class AtariAgent:
         model.add(Flatten())
         model.add(Dense(512, activation='relu'))
         model.add(Dense(self.n_actions))
-        #model.compile(loss='mse', optimizer=RMSprop(lr=self.learning_rate, rho=0.95, epsilon=0.01))
+        model.compile(loss='mse', optimizer=RMSprop(lr=FLAGS.learning_rate, rho=0.95, epsilon=0.01))
 
         return model
 
