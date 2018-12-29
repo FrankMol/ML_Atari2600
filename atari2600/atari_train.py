@@ -51,7 +51,7 @@ def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
     evaluation_score = 0
     controller.reset()
     no_op = True
-    for _ in range(n_steps):
+    for _ in range(100000):
         if no_op > 0:
             action = 1
             no_op -= 1
@@ -65,6 +65,8 @@ def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
             controller.reset()
             episode_cnt += 1
             no_op = random.randrange(FLAGS.no_op_max+1)
+            if episode_cnt >= 30:
+                break
         if is_done or life_lost:
             no_op = 1
     return evaluation_score/episode_cnt if episode_cnt > 0 else -1
