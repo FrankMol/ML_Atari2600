@@ -96,7 +96,7 @@ class AtariAgent:
         optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
                                              rho=FLAGS.gradient_momentum,
                                              epsilon=FLAGS.min_sq_gradient)
-        self.model.compile(optimizer, loss=huber_loss)
+        self.model.compile(optimizer, loss='mse')
         # set up the target model
         self.target_model = keras.models.clone_model(self.model)
 

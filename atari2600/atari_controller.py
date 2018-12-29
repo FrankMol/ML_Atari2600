@@ -32,7 +32,7 @@ class AtariController:
         state_frame = np.reshape([frame], (1, ATARI_SHAPE[0], ATARI_SHAPE[1], 1))
         self.state = np.append(self.state[:, :, :, 1:], state_frame, axis=3)
         # clip reward
-        # reward = np.sign(reward)
+        reward = np.sign(reward)
 
         # return raw frame when evaluating, for making gif
         if evaluation:
