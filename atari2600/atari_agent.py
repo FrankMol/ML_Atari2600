@@ -4,6 +4,7 @@ import random
 import os
 import os.path
 import json
+import tensorflow as tf
 from tensorflow import flags
 from huber_loss import huber_loss
 
@@ -96,7 +97,7 @@ class AtariAgent:
         optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
                                              rho=FLAGS.gradient_momentum,
                                              epsilon=FLAGS.min_sq_gradient)
-        self.model.compile(optimizer, loss='mse')
+        self.model.compile(optimizer, loss=tf.losses.huber_loss)
         # set up the target model
         self.target_model = keras.models.clone_model(self.model)
 
