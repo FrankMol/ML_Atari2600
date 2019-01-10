@@ -1,4 +1,4 @@
-import keras
+# import keras
 import numpy as np
 import random
 import os
@@ -7,10 +7,11 @@ import json
 import tensorflow as tf
 from tensorflow import flags
 from huber_loss import huber_loss
+from DQN import DQN, TargetNetworkUpdater
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
+ATARI_SHAPE = (84, 84, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 
@@ -29,14 +30,17 @@ class AtariAgent:
         self.model_name = os.path.join(MODEL_PATH, model_id)
         self.model = None
         self.target_model = None
+        self.sess = None
+        self.network_updater = None
+        self.saver = None
 
         if os.path.exists(self.model_name + '.h5'):
             # load model and parameters
-            self.model = keras.models.load_model(self.model_name + '.h5',
-                                                 custom_objects={'huber_loss': huber_loss})
-            self.target_model = keras.models.clone_model(self.model)
-            self.clone_target_model()
-            self.load_parameters(self.model_name + '.json')
+            # self.model = keras.models.load_model(self.model_name + '.h5',
+            #                                      custom_objects={'huber_loss': huber_loss})
+            # self.target_model = keras.models.clone_model(self.model)
+            # self.clone_target_model()
+            # self.load_parameters(self.model_name + '.json')
             print("\nLoaded model '{}'".format(model_id))
         else:
             # make new model
@@ -71,89 +75,130 @@ class AtariAgent:
 
     def build_model(self):
 
-        # With the functional API we need to define the inputs.
-        frames_input = keras.layers.Input(ATARI_SHAPE, name='frames')
-        actions_input = keras.layers.Input((self.n_actions,), name='mask')
+        # main DQN and target DQN networks:
+        HIDDEN = 1024
 
-        # Assuming that the input frames are still encoded from 0 to 255. Transforming to [0, 1].
-        normalized = keras.layers.Lambda(lambda x: x / 255.0)(frames_input)
+        with tf.variable_scope('mainDQN'):
+            self.model = DQN(self.n_actions, HIDDEN, FLAGS.learning_rate)  # (★★)
+        with tf.variable_scope('targetDQN'):
+            self.target_model = DQN(self.n_actions, HIDDEN)  # (★★)
 
-        # "The first hidden layer convolves 16 8×8 filters with stride 4 with the input image and applies a rectifier nonlinearity."
-        conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4))(normalized)
+        init = tf.global_variables_initializer()
+        self.saver = tf.train.Saver()
 
-        # "The second hidden layer convolves 32 4×4 filters with stride 2, again followed by a rectifier nonlinearity."
-        conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2))(conv_1)
-        # Flattening the second convolutional layer.
-        conv_flattened = keras.layers.core.Flatten()(conv_2)
-        # "The final hidden layer is fully-connected and consists of 256 rectifier units."
-        hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
-        # "The output layer is a fully-connected linear layer with a single output for each valid action."
-        output = keras.layers.Dense(self.n_actions)(hidden)
-        # Finally, we multiply the output by the mask!
-        filtered_output = keras.layers.merge.Multiply()([output, actions_input])
+        MAIN_DQN_VARS = tf.trainable_variables(scope='mainDQN')
+        TARGET_DQN_VARS = tf.trainable_variables(scope='targetDQN')
 
-        self.model = keras.models.Model(inputs=[frames_input, actions_input], outputs=filtered_output)
+        self.sess = tf.Session()
+        self.sess.run(init)
 
-        optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
-                                             rho=FLAGS.gradient_momentum,
-                                             epsilon=FLAGS.min_sq_gradient)
-        self.model.compile(optimizer, loss=tf.losses.huber_loss)
-        # set up the target model
-        self.target_model = keras.models.clone_model(self.model)
+        self.network_updater = TargetNetworkUpdater(MAIN_DQN_VARS, TARGET_DQN_VARS)
+
 
     def get_one_hot(self, targets):
         return np.eye(self.n_actions)[np.array(targets).reshape(-1)]
 
+    # def fit_batch(self, batch):
+    #     """Do one deep Q learning iteration.
+    #
+    #     Params:
+    #     - model: The DQN
+    #     - target_model the target DQN
+    #     - gamma: Discount factor (should be 0.99)
+    #     - start_states: numpy array of starting states
+    #     - actions: numpy array of one-hot encoded actions corresponding to the start states
+    #     - rewards: numpy array of rewards corresponding to the start states and actions
+    #     - next_states: numpy array of the resulting states corresponding to the start states and actions
+    #     - is_terminal: numpy boolean array of whether the resulting state is terminal
+    #
+    #     """
+    #
+    #     start_states, actions, rewards, next_states, is_terminal = batch
+    #     start_states = start_states.astype(np.float32)
+    #
+    #     # First, predict the Q values of the next states. Note how we are passing ones as the mask.
+    #     actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
+    #     next_q_values = self.target_model.predict([next_states, actions_mask])
+    #     # next_Q_values = model.predict([next_states, np.expand_dims(np.ones(actions.shape), axis=0)])
+    #     # The Q values of the terminal states is 0 by definition, so override them
+    #     next_q_values[is_terminal] = 0
+    #     # The Q values of each start state is the reward + gamma * the max next state Q
+    #     q_values = rewards + FLAGS.discount_factor * np.max(next_q_values, axis=1)
+    #     # Fit the keras model. Note how we are passing the actions as the mask and multiplying
+    #     # the targets by the actions.
+    #     one_hot_actions = self.get_one_hot(actions)
+    #     self.model.fit(
+    #         [start_states, one_hot_actions], one_hot_actions * q_values[:, None],
+    #         epochs=1, batch_size=len(start_states), verbose=0
+    #     )
+
     def fit_batch(self, batch):
-        """Do one deep Q learning iteration.
-
-        Params:
-        - model: The DQN
-        - target_model the target DQN
-        - gamma: Discount factor (should be 0.99)
-        - start_states: numpy array of starting states
-        - actions: numpy array of one-hot encoded actions corresponding to the start states
-        - rewards: numpy array of rewards corresponding to the start states and actions
-        - next_states: numpy array of the resulting states corresponding to the start states and actions
-        - is_terminal: numpy boolean array of whether the resulting state is terminal
-
         """
-
+        Args:
+            batch
+        Returns:
+            loss: The loss of the minibatch, for tensorboard
+        Draws a minibatch from the replay memory, calculates the
+        target Q-value that the prediction Q-value is regressed to.
+        Then a parameter update is performed on the main DQN.
+        """
+        # Draw a minibatch from the replay memory
         start_states, actions, rewards, next_states, is_terminal = batch
-        start_states = start_states.astype(np.float32)
+        # The main network estimates which action is best (in the next
+        # state s', new_states is passed!)
+        # for every transition in the minibatch
+        arg_q_max = self.sess.run(self.model.best_action, feed_dict={self.model.input: next_states})
+        # The target network estimates the Q-values (in the next state s', new_states is passed!)
+        # for every transition in the minibatch
+        q_vals = self.sess.run(self.target_model.q_values, feed_dict={self.target_model.input: next_states})
+        double_q = q_vals[range(FLAGS.batch_size), arg_q_max]
+        # Bellman equation. Multiplication with (1-terminal_flags) makes sure that
+        # if the game is over, targetQ=rewards
+        target_q = rewards + (FLAGS.discount_factor * double_q * (1 - is_terminal))
+        # Gradient descend step to update the parameters of the main network
+        loss, _ = self.sess.run([self.model.loss, self.model.update],
+                              feed_dict={self.model.input: start_states,
+                                         self.model.target_q: target_q,
+                                         self.model.action: actions})
+        return loss
 
-        # First, predict the Q values of the next states. Note how we are passing ones as the mask.
-        actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
-        next_q_values = self.target_model.predict([next_states, actions_mask])
-        # next_Q_values = model.predict([next_states, np.expand_dims(np.ones(actions.shape), axis=0)])
-        # The Q values of the terminal states is 0 by definition, so override them
-        next_q_values[is_terminal] = 0
-        # The Q values of each start state is the reward + gamma * the max next state Q
-        q_values = rewards + FLAGS.discount_factor * np.max(next_q_values, axis=1)
-        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
-        # the targets by the actions.
-        one_hot_actions = self.get_one_hot(actions)
-        self.model.fit(
-            [start_states, one_hot_actions], one_hot_actions * q_values[:, None],
-            epochs=1, batch_size=len(start_states), verbose=0
-        )
+    # def choose_action(self, state, epsilon):
+    #     state = state.astype(np.float32)
+    #     if random.random() < epsilon:
+    #         action = random.randrange(self.n_actions)
+    #     else:
+    #         mask = np.ones(self.n_actions).reshape(1, self.n_actions)
+    #         q_values = self.model.predict([state, mask])
+    #         action = np.argmax(q_values)
+    #     return action
 
     def choose_action(self, state, epsilon):
         state = state.astype(np.float32)
         if random.random() < epsilon:
             action = random.randrange(self.n_actions)
         else:
-            mask = np.ones(self.n_actions).reshape(1, self.n_actions)
-            q_values = self.model.predict([state, mask])
-            action = np.argmax(q_values)
+            action = self.sess.run(self.model.best_action, feed_dict={self.model.input: state})[0]
         return action
 
+    # def save_checkpoint(self, iteration, new_best=False):
+    #     self.model.save(self.model_name + '.h5')
+    #     self.write_iteration(self.model_name + '.json', iteration)
+    #     if new_best:
+    #         self.model.save(self.model_name + '_best.h5')
+    #         self.write_iteration(self.model_name + '_best.json', iteration)
+
     def save_checkpoint(self, iteration, new_best=False):
-        self.model.save(self.model_name + '.h5')
+        self.saver.save(self.sess, self.model_name, global_step=iteration)
         self.write_iteration(self.model_name + '.json', iteration)
         if new_best:
-            self.model.save(self.model_name + '_best.h5')
+            self.saver.save(self.sess, self.model_name, global_step=iteration)
             self.write_iteration(self.model_name + '_best.json', iteration)
 
+
+
+
+    # def clone_target_model(self):
+    #     self.target_model.set_weights(self.model.get_weights())
+
     def clone_target_model(self):
-        self.target_model.set_weights(self.model.get_weights())
+        self.network_updater.update_networks(self.sess)

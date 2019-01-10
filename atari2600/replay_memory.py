@@ -1,7 +1,7 @@
 import numpy as np
 import random
 
-ATARI_SHAPE = (105, 80, 4)
+ATARI_SHAPE = (84, 84, 4)
 
 class ReplayMemory:
     """Replay Memory that stores the last size=1,000,000 transitions"""
