@@ -18,7 +18,7 @@ ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
 # FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 MAX_STEPS = 1000
-EVAL_EPS = 0.05
+EVAL_EPS = 0.01
 
 GIF_PATH = 'gifs/'
 
@@ -58,7 +58,7 @@ def play_episode(env, agent):
         return -1
 
 
-def generate_gif(frames_for_gif, score, path=GIF_PATH):
+def generate_gif(model_id, frames_for_gif, score, path=GIF_PATH):
     """
         Args:
             frame_number: Integer, determining the number of the current frame
@@ -72,7 +72,7 @@ def generate_gif(frames_for_gif, score, path=GIF_PATH):
         frames_for_gif[idx] = resize(frame_idx, (420, 320, 3),
                                      mode='constant', preserve_range=True, order=0).astype(np.uint8)
 
-    imageio.mimsave(os.path.join(path,"ATARI_score_{}.gif".format(score)),
+    imageio.mimsave(os.path.join(path, "{}_score_{}.gif".format(model_id, score)),
                     frames_for_gif, duration=1 / 20)
 
 def main(argv):
@@ -80,6 +80,7 @@ def main(argv):
     env = env_test
     # check if model exists and load model
     if len(argv) > 1:
+        model_id = argv[1]
         agent = AtariAgent(env, argv[1])
     else:
         agent = None
@@ -121,7 +122,7 @@ def main(argv):
                 print("Episode {}: Score = {}, avg score = {}".format(n_episodes, score, total_score/n_episodes))
                 if score > best_score:
                     # save gif
-                    generate_gif(gif_frames, score)
+                    generate_gif(model_id, gif_frames, score)
                     # update best score
                     best_score = score
                 gif_frames = []

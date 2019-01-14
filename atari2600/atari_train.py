@@ -117,6 +117,7 @@ def main(argv):
 
             controller.reset()  # reset environment when done
             is_done = False
+            episode_frames = 0
 
             while not is_done:
                 # Choose the action -> do nothing at beginning of new episode
@@ -159,6 +160,11 @@ def main(argv):
                                                                                        round(score, 2),
                                                                                        round(best_score, 2)))
                     write_logs(model_id, global_step, cur_time-start_time, score)
+
+                episode_frames += 1
+                if episode_frames > 18000:
+                    print("MAX EPISODE FRAMES REACHED. RESETTING ENVIRONMENT")
+                    break
 
                 global_step += 1
 

@@ -34,13 +34,30 @@ class AtariAgent:
         self.network_updater = None
         self.saver = None
 
-        if os.path.exists(self.model_name + '.h5'):
+        if os.path.exists(self.model_name + '.meta'):
             # load model and parameters
             # self.model = keras.models.load_model(self.model_name + '.h5',
             #                                      custom_objects={'huber_loss': huber_loss})
             # self.target_model = keras.models.clone_model(self.model)
             # self.clone_target_model()
             # self.load_parameters(self.model_name + '.json')
+            # main DQN and target DQN networks:
+            HIDDEN = 1024
+
+            with tf.variable_scope('mainDQN'):
+                self.model = DQN(self.n_actions, HIDDEN, FLAGS.learning_rate)  # (★★)
+            with tf.variable_scope('targetDQN'):
+                self.target_model = DQN(self.n_actions, HIDDEN)  # (★★)
+
+            init = tf.global_variables_initializer()
+            self.saver = tf.train.Saver()
+
+            MAIN_DQN_VARS = tf.trainable_variables(scope='mainDQN')
+            TARGET_DQN_VARS = tf.trainable_variables(scope='targetDQN')
+
+            self.sess = tf.Session()
+            self.saver = tf.train.import_meta_graph(self.model_name + '.meta')
+            self.saver.restore(self.sess, tf.train.latest_checkpoint(MODEL_PATH))
             print("\nLoaded model '{}'".format(model_id))
         else:
             # make new model
