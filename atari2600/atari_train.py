@@ -28,7 +28,7 @@ MODEL_PATH = 'trained_models/'
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
 flags.DEFINE_integer('checkpoint_frequency', 10000, "number of iterations after which model file is updated")
-flags.DEFINE_integer('max_iterations', 20000000, "number of iterations after which training is done")
+flags.DEFINE_integer('max_iterations', np.inf, "number of iterations after which training is done")
 flags.DEFINE_integer('batch_size', 32, "mini batch size")
 flags.DEFINE_integer('memory_size', 1000000, "max number of stored states from which batch is sampled")
 flags.DEFINE_integer('memory_start_size', 50000, "number of states with which the memory is initialized")
@@ -37,10 +37,11 @@ flags.DEFINE_float('initial_epsilon', 1, "initial value of epsilon used for expl
 flags.DEFINE_float('final_epsilon', 0.1, "final value of epsilon used for exploration of state space")
 flags.DEFINE_float('eval_epsilon', 0.05, "value of epsilon used in epsilon-greedy policy evaluation")
 flags.DEFINE_integer('eval_steps', 10000, "number of evaluation steps used to evaluate performance")
+flags.DEFINE_integer('eval_episodes', 10, "number of evaluation steps used to evaluate performance")
 flags.DEFINE_integer('annealing_steps', 1000000, "frame at which final exploration reached")  # LET OP: frame/q?
 flags.DEFINE_integer('no_op_max', 10, "max number of do nothing actions at beginning of episode")
 flags.DEFINE_integer('no_op_action', 0, "action that the agent plays as no-op at beginning of episode")
-flags.DEFINE_integer('update_frequency', 1, "number of actions played by agent between each q-iteration")
+flags.DEFINE_integer('update_frequency', 4, "number of actions played by agent between each q-iteration")
 flags.DEFINE_integer('iteration', 0, "iteration at which training should start or resume")
 flags.DEFINE_integer('target_update_frequency', 10000, "number of iterations after which target model is updated")
 
@@ -51,7 +52,7 @@ def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
     evaluation_score = 0
     controller.reset()
     no_op = True
-    for _ in range(n_steps):
+    for _ in range(1000000):
         if no_op > 0:
             action = 1
             no_op -= 1
@@ -65,14 +66,20 @@ def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
             controller.reset()
             episode_cnt += 1
             no_op = random.randrange(FLAGS.no_op_max+1)
+            if episode_cnt >= FLAGS.eval_eps:
+                break
         if is_done or life_lost:
             no_op = 1
     return evaluation_score/episode_cnt if episode_cnt > 0 else -1
 
 
 def get_epsilon(iteration):
-    epsilon = max(FLAGS.final_epsilon, FLAGS.initial_epsilon - (FLAGS.initial_epsilon - FLAGS.final_epsilon)
-                  / FLAGS.annealing_steps * iteration)
+    if iteration < 1000000:
+        epsilon = max(FLAGS.final_epsilon, FLAGS.initial_epsilon - (FLAGS.initial_epsilon - FLAGS.final_epsilon)
+                    / FLAGS.annealing_steps * iteration)
+    else:
+        epsilon = max(0.01, 0.1 - (0.1 - 0.01)
+                    / 1000000 * (iteration-1000000))
     return epsilon
 
 
