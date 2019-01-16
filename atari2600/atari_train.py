@@ -28,7 +28,7 @@ MODEL_PATH = 'trained_models/'
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
 flags.DEFINE_integer('checkpoint_frequency', 10000, "number of iterations after which model file is updated")
-flags.DEFINE_integer('max_iterations', np.inf, "number of iterations after which training is done")
+flags.DEFINE_integer('max_iterations', 20000000, "number of iterations after which training is done")
 flags.DEFINE_integer('batch_size', 32, "mini batch size")
 flags.DEFINE_integer('memory_size', 1000000, "max number of stored states from which batch is sampled")
 flags.DEFINE_integer('memory_start_size', 50000, "number of states with which the memory is initialized")
@@ -66,7 +66,7 @@ def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
             controller.reset()
             episode_cnt += 1
             no_op = random.randrange(FLAGS.no_op_max+1)
-            if episode_cnt >= FLAGS.eval_eps:
+            if episode_cnt >= FLAGS.eval_episodes:
                 break
         if is_done or life_lost:
             no_op = 1
@@ -117,7 +117,7 @@ def main(argv):
     # start training
     best_score = -np.inf  # keeps track of best score reached, used for saving best-so-far model
     try:
-        while global_step < FLAGS.max_iterations:
+        while True:
 
             controller.reset()  # reset environment when done
             is_done = False
