@@ -70,25 +70,15 @@ class AtariAgent:
 
     def build_model(self):
 
-        # With the functional API we need to define the inputs.
         frames_input = keras.layers.Input(ATARI_SHAPE, name='frames')
         actions_input = keras.layers.Input((self.n_actions,), name='mask')
 
-        # Assuming that the input frames are still encoded from 0 to 255. Transforming to [0, 1].
         normalized = keras.layers.Lambda(lambda x: x / 255.0)(frames_input)
-
-        # "The first hidden layer convolves 16 8×8 filters with stride 4 with the input image and applies a rectifier nonlinearity."
         conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4))(normalized)
-
-        # "The second hidden layer convolves 32 4×4 filters with stride 2, again followed by a rectifier nonlinearity."
         conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2))(conv_1)
-        # Flattening the second convolutional layer.
         conv_flattened = keras.layers.core.Flatten()(conv_2)
-        # "The final hidden layer is fully-connected and consists of 256 rectifier units."
         hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
-        # "The output layer is a fully-connected linear layer with a single output for each valid action."
         output = keras.layers.Dense(self.n_actions)(hidden)
-        # Finally, we multiply the output by the mask!
         filtered_output = keras.layers.merge.Multiply()([output, actions_input])
 
         self.model = keras.models.Model(inputs=[frames_input, actions_input], outputs=filtered_output)
@@ -104,20 +94,6 @@ class AtariAgent:
         return np.eye(self.n_actions)[np.array(targets).reshape(-1)]
 
     def fit_batch(self, batch):
-        """Do one deep Q learning iteration.
-
-        Params:
-        - model: The DQN
-        - target_model the target DQN
-        - gamma: Discount factor (should be 0.99)
-        - start_states: numpy array of starting states
-        - actions: numpy array of one-hot encoded actions corresponding to the start states
-        - rewards: numpy array of rewards corresponding to the start states and actions
-        - next_states: numpy array of the resulting states corresponding to the start states and actions
-        - is_terminal: numpy boolean array of whether the resulting state is terminal
-
-        """
-
         start_states, actions, rewards, next_states, is_terminal = batch
         start_states = start_states.astype(np.float32)
 
