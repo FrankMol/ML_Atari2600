@@ -74,12 +74,8 @@ def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
 
 
 def get_epsilon(iteration):
-    if iteration < 1000000:
-        epsilon = max(FLAGS.final_epsilon, FLAGS.initial_epsilon - (FLAGS.initial_epsilon - FLAGS.final_epsilon)
-                    / FLAGS.annealing_steps * iteration)
-    else:
-        epsilon = max(0.01, 0.1 - (0.1 - 0.01)
-                    / 1000000 * (iteration-1000000))
+    epsilon = max(FLAGS.final_epsilon, FLAGS.initial_epsilon - (FLAGS.initial_epsilon - FLAGS.final_epsilon)
+                / FLAGS.annealing_steps * iteration)
     return epsilon
 
 
