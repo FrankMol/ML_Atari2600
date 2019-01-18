@@ -130,7 +130,7 @@ def main(argv):
                 memory.add_experience(action, frame, reward, terminal)
 
                 # Sample mini batch from memory and fit model
-                if global_step % FLAGS.update_frequency == 0 and global_step > 0:
+                if global_step % FLAGS.update_frequency == 0 and global_step > FLAGS.iteration:
                     batch = memory.get_minibatch()
                     agent.fit_batch(batch)
                     q_iteration += 1
@@ -139,11 +139,11 @@ def main(argv):
                         start_time = time.time()
                         print("Starting training...")
 
-                if global_step % FLAGS.target_update_frequency == 0 and global_step > 0:
+                if global_step % FLAGS.target_update_frequency == 0 and global_step > FLAGS.iteration:
                     agent.clone_target_model()
 
                 # provide feedback about iteration, elapsed time, current performance
-                if global_step % FLAGS.checkpoint_frequency == 0 and global_step > 0:
+                if global_step % FLAGS.checkpoint_frequency == 0 and global_step > FLAGS.iteration:
                     score = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
                     cur_time = time.time()
                     m, s = divmod(cur_time-start_time, 60)

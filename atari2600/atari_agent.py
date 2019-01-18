@@ -33,7 +33,7 @@ class AtariAgent:
             # load model and parameters
             self.model = keras.models.load_model(self.model_name + '.h5',
                                                  custom_objects={'huber_loss': huber_loss})
-            # self.target_model = keras.models.clone_model(self.model)
+            self.target_model = keras.models.clone_model(self.model)
             self.clone_target_model()
             self.load_parameters(self.model_name + '.json')
             print("\nLoaded model '{}'".format(model_id))
