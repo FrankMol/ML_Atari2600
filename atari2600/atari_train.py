@@ -27,7 +27,7 @@ MODEL_PATH = 'trained_models/'
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
-flags.DEFINE_integer('checkpoint_frequency', 10000, "number of iterations after which model file is updated")
+flags.DEFINE_integer('checkpoint_frequency', 50000, "number of iterations after which model file is updated")
 flags.DEFINE_integer('max_iterations', 20000000, "number of iterations after which training is done")
 flags.DEFINE_integer('batch_size', 32, "mini batch size")
 flags.DEFINE_integer('memory_size', 1000000, "max number of stored states from which batch is sampled")
