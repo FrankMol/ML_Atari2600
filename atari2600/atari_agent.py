@@ -26,8 +26,9 @@ class AtariAgent:
     def __init__(self, env, model_id):
         self.n_actions = env.action_space.n
         self.model_name = os.path.join(MODEL_PATH, model_id)
-        self.model = None
-        self.target_model = None
+        self.q_model = None
+        self.v_target_model = None
+        self.v_model = None
 
         if os.path.exists(self.model_name + '.h5'):
             # load model and parameters
@@ -39,7 +40,8 @@ class AtariAgent:
             print("\nLoaded model '{}'".format(model_id))
         else:
             # make new model
-            self.build_model()
+            self.build_v_model()
+            self.build_q_model()
             if FLAGS.use_checkpoints:
                 self.save_checkpoint(0)
             print("\nCreated new model with name '{}'".format(model_id))
@@ -68,7 +70,7 @@ class AtariAgent:
         with open(config_file, "w+") as f:
             f.write(json.dumps(items, indent=4))
 
-    def build_model(self):
+    def build_q_model(self):
 
         frames_input = keras.layers.Input(ATARI_SHAPE, name='frames')
         actions_input = keras.layers.Input((self.n_actions,), name='mask')
@@ -81,14 +83,33 @@ class AtariAgent:
         output = keras.layers.Dense(self.n_actions)(hidden)
         filtered_output = keras.layers.merge.Multiply()([output, actions_input])
 
-        self.model = keras.models.Model(inputs=[frames_input, actions_input], outputs=filtered_output)
+        self.q_model = keras.models.Model(inputs=[frames_input, actions_input], outputs=filtered_output)
 
         optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
                                              rho=FLAGS.gradient_momentum,
                                              epsilon=FLAGS.min_sq_gradient)
-        self.model.compile(optimizer, loss=huber_loss)
+        self.q_model.compile(optimizer, loss=huber_loss)
+
+    def build_v_model(self):
+        frames_input = keras.layers.Input(ATARI_SHAPE, name='frames')
+
+        normalized = keras.layers.Lambda(lambda x: x / 255.0)(frames_input)
+        conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4))(normalized)
+        conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2))(conv_1)
+        conv_flattened = keras.layers.core.Flatten()(conv_2)
+        hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
+        output = keras.layers.Dense(1)(hidden)
+        # filtered_output = keras.layers.merge.Multiply()([output, actions_input])
+
+        # self.model = keras.models.Model(inputs=[frames_input], outputs=filtered_output)
+        self.v_model = keras.models.Model(inputs=[frames_input], outputs=output)
+
+        optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
+                                             rho=FLAGS.gradient_momentum,
+                                             epsilon=FLAGS.min_sq_gradient)
+        self.v_model.compile(optimizer, loss=huber_loss)
         # set up the target model
-        self.target_model = keras.models.clone_model(self.model)
+        self.v_target_model = keras.models.clone_model(self.v_model)
 
     def get_one_hot(self, targets):
         return np.eye(self.n_actions)[np.array(targets).reshape(-1)]
@@ -97,19 +118,31 @@ class AtariAgent:
         start_states, actions, rewards, next_states, is_terminal = batch
         start_states = start_states.astype(np.float32)
 
-        actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
 
-        next_q_values = self.target_model.predict([next_states, actions_mask])
+        # update v:
+        next_v_values = self.v_target_model.predict([next_states])
+        next_v_values[is_terminal] = 0
+        v_values = rewards + FLAGS.discount_factor * next_v_values
+        self.v_model.fit([start_states], v_values[:, 0], epochs=1, batch_size=len(start_states), verbose=0)
 
-        next_q_values[is_terminal] = 0
-
-        q_values = rewards + FLAGS.discount_factor * np.max(next_q_values, axis=1)
-
+        # update q:
         one_hot_actions = self.get_one_hot(actions)
-        self.model.fit(
-            [start_states, one_hot_actions], one_hot_actions * q_values[:, None],
-            epochs=1, batch_size=len(start_states), verbose=0
-        )
+        self.q_model.fit([start_states, one_hot_actions], v_values[:, 0],
+                         epochs=1, batch_size=len(start_states), verbose=0)
+
+        # actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
+        #
+        # next_q_values = self.target_model.predict([next_states, actions_mask])
+        #
+        # next_q_values[is_terminal] = 0
+        #
+        # q_values = rewards + FLAGS.discount_factor * np.max(next_q_values, axis=1)
+        #
+        # one_hot_actions = self.get_one_hot(actions)
+        # self.model.fit(
+        #     [start_states, one_hot_actions], one_hot_actions * q_values[:, None],
+        #     epochs=1, batch_size=len(start_states), verbose=0
+        # )
 
     def choose_action(self, state, epsilon):
         state = state.astype(np.float32)
@@ -117,16 +150,16 @@ class AtariAgent:
             action = random.randrange(self.n_actions)
         else:
             mask = np.ones(self.n_actions).reshape(1, self.n_actions)
-            q_values = self.model.predict([state, mask])
+            q_values = self.q_model.predict([state, mask])
             action = np.argmax(q_values)
         return action
 
     def save_checkpoint(self, iteration, new_best=False):
-        self.model.save(self.model_name + '.h5')
+        self.q_model.save(self.model_name + '.h5')
         self.write_iteration(self.model_name + '.json', iteration)
         if new_best:
-            self.model.save(self.model_name + '_best.h5')
+            self.q_model.save(self.model_name + '_best.h5')
             self.write_iteration(self.model_name + '_best.json', iteration)
 
     def clone_target_model(self):
-        self.target_model.set_weights(self.model.get_weights())
+        self.v_target_model.set_weights(self.v_model.get_weights())
