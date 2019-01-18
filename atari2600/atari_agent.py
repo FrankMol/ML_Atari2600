@@ -97,16 +97,14 @@ class AtariAgent:
         start_states, actions, rewards, next_states, is_terminal = batch
         start_states = start_states.astype(np.float32)
 
-        # First, predict the Q values of the next states. Note how we are passing ones as the mask.
         actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
+
         next_q_values = self.target_model.predict([next_states, actions_mask])
-        # next_Q_values = model.predict([next_states, np.expand_dims(np.ones(actions.shape), axis=0)])
-        # The Q values of the terminal states is 0 by definition, so override them
+
         next_q_values[is_terminal] = 0
-        # The Q values of each start state is the reward + gamma * the max next state Q
+
         q_values = rewards + FLAGS.discount_factor * np.max(next_q_values, axis=1)
-        # Fit the keras model. Note how we are passing the actions as the mask and multiplying
-        # the targets by the actions.
+
         one_hot_actions = self.get_one_hot(actions)
         self.model.fit(
             [start_states, one_hot_actions], one_hot_actions * q_values[:, None],
