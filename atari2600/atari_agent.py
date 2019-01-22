@@ -76,8 +76,8 @@ class AtariAgent:
         actions_input = keras.layers.Input((self.n_actions,), name='mask')
 
         normalized = keras.layers.Lambda(lambda x: x / 255.0)(frames_input)
-        conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4))(normalized)
-        conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2))(conv_1)
+        conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4), kernel_initializer=keras.initializers.VarianceScaling(scale=2.0))(normalized)
+        conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2), kernel_initializer=keras.initializers.VarianceScaling(scale=2.0))(conv_1)
         conv_flattened = keras.layers.core.Flatten()(conv_2)
         hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
         output = keras.layers.Dense(self.n_actions)(hidden)
@@ -94,8 +94,8 @@ class AtariAgent:
         frames_input = keras.layers.Input(ATARI_SHAPE, name='frames')
 
         normalized = keras.layers.Lambda(lambda x: x / 255.0)(frames_input)
-        conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4))(normalized)
-        conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2))(conv_1)
+        conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4), kernel_initializer=keras.initializers.VarianceScaling(scale=2.0))(normalized)
+        conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2), kernel_initializer=keras.initializers.VarianceScaling(scale=2.0))(conv_1)
         conv_flattened = keras.layers.core.Flatten()(conv_2)
         hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
         output = keras.layers.Dense(1)(hidden)
