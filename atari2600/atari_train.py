@@ -12,6 +12,7 @@ import sys
 import time
 import csv
 import random
+import tensorflow as tf
 from replay_memory import ReplayMemory
 from atari_agent import AtariAgent
 from atari_controller import AtariController
@@ -24,6 +25,20 @@ default_model_name = "untitled_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%
 ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
 FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
+
+SUMMARIES = "tensorboard/"          # logdir for tensorboard
+RUNID = sys.argv[1]
+os.makedirs(os.path.join(SUMMARIES, RUNID), exist_ok=True)
+SUMM_WRITER = tf.summary.FileWriter(os.path.join(SUMMARIES, RUNID))
+
+# tensorboard
+with tf.name_scope('Performance'):
+    LOSS_PH = tf.placeholder(tf.float32, shape=None, name='loss_summary')
+    LOSS_SUMMARY = tf.summary.scalar('loss', LOSS_PH)
+    SCORE_PH = tf.placeholder(tf.float32, shape=None, name='score_summary')
+    SCORE_SUMMARY = tf.summary.scalar('score', SCORE_PH)
+
+PERFORMANCE_SUMMARIES = tf.summary.merge([LOSS_SUMMARY, SCORE_SUMMARY])
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
@@ -85,6 +100,12 @@ def write_logs(model_id, iteration, seconds, score):
         csv_writer = csv.writer(f)
         csv_writer.writerow([iteration, round(seconds), score])
 
+def write_tensorboard(sess, loss_list, score, global_step):
+    summ = sess.run(PERFORMANCE_SUMMARIES,
+                    feed_dict={LOSS_PH: np.mean(loss_list),
+                               SCORE_PH: score})
+
+    SUMM_WRITER.add_summary(summ, global_step)
 
 def main(argv):
 
@@ -101,12 +122,14 @@ def main(argv):
     evaluation_controller = AtariController(env_test)
     memory = ReplayMemory()
     agent = AtariAgent(env, model_id)
+    sess = tf.Session()
 
     # get start iteration (for resuming training on stored model)
     global_step = FLAGS.iteration - FLAGS.memory_start_size
     q_iteration = 0
     # start timer
     start_time = time.time()
+    loss_list = []
 
     print("Initializing replay memory with {} states...".format(FLAGS.memory_start_size))
 
@@ -132,7 +155,8 @@ def main(argv):
                 # Sample mini batch from memory and fit model
                 if global_step % FLAGS.update_frequency == 0 and global_step > FLAGS.iteration:
                     batch = memory.get_minibatch()
-                    agent.fit_batch(batch)
+                    hist = agent.fit_batch(batch)
+                    loss_list.append(hist.history['loss'][0])
                     q_iteration += 1
 
                     if q_iteration == 1:
@@ -159,6 +183,8 @@ def main(argv):
                                                                                        round(score, 2),
                                                                                        round(best_score, 2)))
                     write_logs(model_id, global_step, cur_time-start_time, score)
+                    write_tensorboard(sess, loss_list, score, global_step)
+                    loss_list = []
 
                 global_step += 1
 

@@ -106,10 +106,11 @@ class AtariAgent:
         q_values = rewards + FLAGS.discount_factor * np.max(next_q_values, axis=1)
 
         one_hot_actions = self.get_one_hot(actions)
-        self.model.fit(
+        loss = self.model.fit(
             [start_states, one_hot_actions], one_hot_actions * q_values[:, None],
             epochs=1, batch_size=len(start_states), verbose=0
         )
+        return loss
 
     def choose_action(self, state, epsilon):
         state = state.astype(np.float32)
