@@ -18,15 +18,17 @@ from atari_agent import AtariAgent
 from atari_controller import AtariController
 from tensorflow import flags
 from datetime import datetime
+from gif_maker import convert_tensor_to_gif_summary
 
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'  # blocks irrelevant tensorflow warning
 
 default_model_name = "untitled_model_" + datetime.utcnow().strftime("%Y%m%d%H%M%S")
-ATARI_SHAPE = (105, 80, 4)  # tensor flow backend -> channels last
+ATARI_SHAPE = (105, 80, 4)  # tensorflow backend -> channels last
 FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
+os.makedirs(MODEL_PATH, exist_ok=True)
 
-SUMMARIES = "tensorboard/"          # logdir for tensorboard
+SUMMARIES = "summaries/"          # logdir for tensorboard
 RUNID = sys.argv[1]
 os.makedirs(os.path.join(SUMMARIES, RUNID), exist_ok=True)
 SUMM_WRITER = tf.summary.FileWriter(os.path.join(SUMMARIES, RUNID))
@@ -40,9 +42,12 @@ with tf.name_scope('Performance'):
 
 PERFORMANCE_SUMMARIES = tf.summary.merge([LOSS_SUMMARY, SCORE_SUMMARY])
 
+GIF_PH = tf.placeholder(tf.float32, shape=[None, None, None, 3], name='gif_summary')
+GIF_SUMMARY = tf.summary.tensor_summary('gif', GIF_PH)
+
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
-flags.DEFINE_integer('checkpoint_frequency', 10000, "number of iterations after which model file is updated")
+flags.DEFINE_integer('checkpoint_frequency', 50000, "number of iterations after which model file is updated")
 flags.DEFINE_integer('max_iterations', 20000000, "number of iterations after which training is done")
 flags.DEFINE_integer('batch_size', 32, "mini batch size")
 flags.DEFINE_integer('memory_size', 1000000, "max number of stored states from which batch is sampled")
@@ -61,19 +66,21 @@ flags.DEFINE_integer('iteration', 0, "iteration at which training should start o
 flags.DEFINE_integer('target_update_frequency', 10000, "number of iterations after which target model is updated")
 
 
-def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
+def evaluate_model(controller, agent, epsilon=FLAGS.eval_epsilon, n_episodes=FLAGS.eval_episodes):
     episode_cnt = 0
     score = 0
     evaluation_score = 0
+    gif_frames = []
     controller.reset()
-    no_op = True
+    no_op = 1
     for _ in range(1000000):
         if no_op > 0:
             action = 1
             no_op -= 1
         else:
-            action = agent.choose_action(controller.get_state(), FLAGS.eval_epsilon)
-        _, reward, is_done, life_lost = controller.step(action)
+            action = agent.choose_action(controller.get_state(), epsilon)
+        frame, reward, is_done, life_lost = controller.step(action, evaluation=True)
+        gif_frames.append(frame)
         score += reward
         if is_done:
             evaluation_score += score
@@ -81,11 +88,13 @@ def evaluate_model(controller, agent, n_steps=FLAGS.eval_steps):
             controller.reset()
             episode_cnt += 1
             no_op = random.randrange(FLAGS.no_op_max+1)
-            if episode_cnt >= FLAGS.eval_episodes:
+            if episode_cnt >= n_episodes:
                 break
+            gif_frames = []
         if is_done or life_lost:
-            no_op = 1
-    return evaluation_score/episode_cnt if episode_cnt > 0 else -1
+            no_op = 1  # always start with no_op during evaluation
+    result = evaluation_score/episode_cnt if episode_cnt > 0 else -1
+    return result, gif_frames
 
 
 def get_epsilon(iteration):
@@ -100,12 +109,18 @@ def write_logs(model_id, iteration, seconds, score):
         csv_writer = csv.writer(f)
         csv_writer.writerow([iteration, round(seconds), score])
 
-def write_tensorboard(sess, loss_list, score, global_step):
+
+def write_summaries(sess, loss_list, score, global_step, gif_frames):
+    # write score and loss
     summ = sess.run(PERFORMANCE_SUMMARIES,
                     feed_dict={LOSS_PH: np.mean(loss_list),
                                SCORE_PH: score})
-
     SUMM_WRITER.add_summary(summ, global_step)
+
+    # write gif
+    gif_frames = np.asarray(gif_frames)
+    summ_gif = sess.run(GIF_SUMMARY, feed_dict={GIF_PH: gif_frames})
+    SUMM_WRITER.add_summary(convert_tensor_to_gif_summary(summ_gif, fps=20), global_step)
 
 def main(argv):
 
@@ -168,7 +183,7 @@ def main(argv):
 
                 # provide feedback about iteration, elapsed time, current performance
                 if global_step % FLAGS.checkpoint_frequency == 0 and global_step > FLAGS.iteration:
-                    score = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
+                    score, _ = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
                     cur_time = time.time()
                     m, s = divmod(cur_time-start_time, 60)
                     h, m = divmod(m, 60)
@@ -183,7 +198,9 @@ def main(argv):
                                                                                        round(score, 2),
                                                                                        round(best_score, 2)))
                     write_logs(model_id, global_step, cur_time-start_time, score)
-                    write_tensorboard(sess, loss_list, score, global_step)
+
+                    _, gif_frames = evaluate_model(evaluation_controller, agent, epsilon=0, n_episodes=1)
+                    write_summaries(sess, loss_list, score, global_step, gif_frames)
                     loss_list = []
 
                 global_step += 1
