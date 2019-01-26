@@ -42,8 +42,8 @@ with tf.name_scope('Performance'):
 
 PERFORMANCE_SUMMARIES = tf.summary.merge([LOSS_SUMMARY, SCORE_SUMMARY])
 
-GIF_PH = tf.placeholder(tf.float32, shape=[None, None, None, 3], name='gif_summary')
-GIF_SUMMARY = tf.summary.tensor_summary('gif', GIF_PH)
+# GIF_PH = tf.placeholder(tf.float32, shape=[None, None, None, 3], name='gif_summary')
+# GIF_SUMMARY = tf.summary.tensor_summary('gif', GIF_PH)
 
 # define hyper parameters -> these can all be passed as command line arguments!
 flags.DEFINE_boolean('use_checkpoints', True, "set if model will be saved during training. Set to False for debugging")
@@ -118,9 +118,9 @@ def write_summaries(sess, loss_list, score, global_step, gif_frames):
     SUMM_WRITER.add_summary(summ, global_step)
 
     # write gif
-    gif_frames = np.asarray(gif_frames)
-    summ_gif = sess.run(GIF_SUMMARY, feed_dict={GIF_PH: gif_frames})
-    SUMM_WRITER.add_summary(convert_tensor_to_gif_summary(summ_gif, fps=20), global_step)
+    # gif_frames = np.asarray(gif_frames)
+    # summ_gif = sess.run(GIF_SUMMARY, feed_dict={GIF_PH: gif_frames})
+    # SUMM_WRITER.add_summary(convert_tensor_to_gif_summary(summ_gif, fps=20), global_step)
 
 def main(argv):
 
@@ -199,8 +199,8 @@ def main(argv):
                                                                                        round(best_score, 2)))
                     write_logs(model_id, global_step, cur_time-start_time, score)
 
-                    _, gif_frames = evaluate_model(evaluation_controller, agent, epsilon=0, n_episodes=1)
-                    write_summaries(sess, loss_list, score, global_step, gif_frames)
+                    # _, gif_frames = evaluate_model(evaluation_controller, agent, epsilon=0, n_episodes=1)
+                    write_summaries(sess, loss_list, score, global_step, _)
                     loss_list = []
 
                 global_step += 1
