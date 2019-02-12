@@ -34,8 +34,9 @@ class AtariAgent:
             # load model and parameters
             self.model = keras.models.load_model(self.model_name + '.h5',
                                                  custom_objects={'huber_loss': huber_loss})
-            self.target_model = keras.models.clone_model(self.model)
-            self.clone_target_model()
+            if self.use_target_model:
+                self.target_model = keras.models.clone_model(self.model)
+                self.clone_target_model()
             self.load_parameters(self.model_name + '.json')
             print("\nLoaded model '{}'".format(model_id))
         else:
@@ -94,7 +95,8 @@ class AtariAgent:
             self.model.compile(optimizer, loss='mse')
 
         # set up target model
-        self.target_model = keras.models.clone_model(self.model)
+        if FLAGS.use_target_model:
+            self.target_model = keras.models.clone_model(self.model)
 
     def get_one_hot(self, targets):
         return np.eye(self.n_actions)[np.array(targets).reshape(-1)]
@@ -105,7 +107,10 @@ class AtariAgent:
 
         actions_mask = np.ones((FLAGS.batch_size, self.n_actions))
 
-        next_q_values = self.target_model.predict([next_states, actions_mask])
+        if FLAGS.use_target_model:
+            next_q_values = self.target_model.predict([next_states, actions_mask])
+        else:
+            next_q_values = self.model.predict([next_states, actions_mask])
 
         next_q_values[is_terminal] = 0
 

@@ -63,6 +63,8 @@ flags.DEFINE_integer('no_op_max', 10, "max number of do nothing actions at begin
 flags.DEFINE_integer('no_op_action', 0, "action that the agent plays as no-op at beginning of episode")
 flags.DEFINE_integer('update_frequency', 4, "number of actions played by agent between each q-iteration")
 flags.DEFINE_integer('iteration', 0, "iteration at which training should start or resume")
+
+flags.DEFINE_boolean('use_target_model', True, "use separate target model for predicting q-values in update step")
 flags.DEFINE_integer('target_update_frequency', 10000, "number of iterations after which target model is updated")
 
 
@@ -177,32 +179,32 @@ def main(argv):
                         start_time = time.time()
                         print("Starting training...")
 
-                # update target model
-                if global_step % FLAGS.target_update_frequency == 0 and global_step > FLAGS.iteration:
-                    agent.clone_target_model()
+                    # update target model
+                    if FLAGS.use_target_model and q_iteration % FLAGS.target_update_frequency == 0 and global_step > FLAGS.iteration:
+                        agent.clone_target_model()
 
-                # provide feedback about iteration, elapsed time, current performance
-                if global_step % FLAGS.checkpoint_frequency == 0 and global_step > FLAGS.iteration:
-                    score, _ = evaluate_model(evaluation_controller, agent)  # play evaluation episodes
-                    cur_time = time.time()
-                    m, s = divmod(cur_time-start_time, 60)
-                    h, m = divmod(m, 60)
-                    time_str = "%d:%02d:%02d" % (h, m, s)
-                    # check if score is best so far and update model file(s)
-                    is_highest = score > best_score
-                    if FLAGS.use_checkpoints:
-                        agent.save_checkpoint(global_step, is_highest)
-                    if is_highest:
-                        best_score = score
-                    print("iteration {}, elapsed time: {}, score: {}, best: {}".format(global_step, time_str,
-                                                                                       round(score, 2),
-                                                                                       round(best_score, 2)))
-                    # write training progress to csv
-                    write_logs(model_id, global_step, cur_time-start_time, score)
+                    # provide feedback about iteration, elapsed time, current performance
+                    if q_iteration % FLAGS.checkpoint_frequency == 0 and global_step > FLAGS.iteration:
+                        score, _ = evaluate_model(evaluation_controller, agent)  # play evaluation episodes
+                        cur_time = time.time()
+                        m, s = divmod(cur_time-start_time, 60)
+                        h, m = divmod(m, 60)
+                        time_str = "%d:%02d:%02d" % (h, m, s)
+                        # check if score is best so far and update model file(s)
+                        is_highest = score > best_score
+                        if FLAGS.use_checkpoints:
+                            agent.save_checkpoint(global_step, is_highest)
+                        if is_highest:
+                            best_score = score
+                        print("iteration {}, elapsed time: {}, score: {}, best: {}".format(q_iteration, time_str,
+                                                                                           round(score, 2),
+                                                                                           round(best_score, 2)))
+                        # write training progress to csv
+                        write_logs(model_id, q_iteration, cur_time-start_time, score)
 
-                    # _, gif_frames = evaluate_model(evaluation_controller, agent, epsilon=0, n_episodes=1)
-                    write_summaries(sess, loss_list, score, global_step, _)
-                    loss_list = []
+                        # _, gif_frames = evaluate_model(evaluation_controller, agent, epsilon=0, n_episodes=1)
+                        write_summaries(sess, loss_list, score, q_iteration, _)
+                        loss_list = []
 
                 global_step += 1
 
