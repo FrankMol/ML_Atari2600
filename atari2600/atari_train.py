@@ -65,7 +65,7 @@ flags.DEFINE_integer('update_frequency', 4, "number of actions played by agent b
 flags.DEFINE_integer('iteration', 0, "iteration at which training should start or resume")
 
 flags.DEFINE_boolean('use_target_model', True, "use separate target model for predicting q-values in update step")
-flags.DEFINE_integer('target_update_frequency', 10000, "number of iterations after which target model is updated")
+flags.DEFINE_integer('target_update_frequency', 2500, "number of iterations after which target model is updated")
 
 
 def evaluate_model(controller, agent, epsilon=FLAGS.eval_epsilon, n_episodes=FLAGS.eval_episodes):
@@ -112,12 +112,12 @@ def write_logs(model_id, iteration, seconds, score):
         csv_writer.writerow([iteration, round(seconds), score])
 
 
-def write_summaries(sess, loss_list, score, global_step, gif_frames):
+def write_summaries(sess, loss_list, score, iteration, gif_frames):
     # write score and loss
     summ = sess.run(PERFORMANCE_SUMMARIES,
                     feed_dict={LOSS_PH: np.mean(loss_list),
                                SCORE_PH: score})
-    SUMM_WRITER.add_summary(summ, global_step)
+    SUMM_WRITER.add_summary(summ, iteration)
 
     # write gif
     # gif_frames = np.asarray(gif_frames)
@@ -141,8 +141,9 @@ def main(argv):
     sess = tf.Session()
 
     # get start iteration (for resuming training on stored model)
-    global_step = FLAGS.iteration - FLAGS.memory_start_size
-    q_iteration = 0
+    q_iteration = FLAGS.iteration
+    start_step = (FLAGS.iteration * FLAGS.update_frequency)
+    global_step = (FLAGS.iteration * FLAGS.update_frequency) - FLAGS.memory_start_size
     # start timer
     start_time = time.time()
     loss_list = []
@@ -159,7 +160,7 @@ def main(argv):
 
             while not is_done:
                 # Choose the action -> do nothing at beginning of new episode
-                action = agent.choose_action(controller.get_state(), get_epsilon(global_step))
+                action = agent.choose_action(controller.get_state(), get_epsilon(q_iteration))
 
                 # interact with environment
                 frame, reward, is_done, life_lost = controller.step(action)
@@ -169,7 +170,7 @@ def main(argv):
                 memory.add_experience(frame, action, reward, terminal)
 
                 # Sample mini batch from memory and fit model
-                if global_step % FLAGS.update_frequency == 0 and global_step > FLAGS.iteration:
+                if global_step % FLAGS.update_frequency == 0 and global_step > start_step:
                     batch = memory.get_batch(FLAGS.batch_size)
                     hist = agent.fit_batch(batch)
                     loss_list.append(hist.history['loss'][0])
@@ -180,11 +181,11 @@ def main(argv):
                         print("Starting training...")
 
                     # update target model
-                    if FLAGS.use_target_model and q_iteration % FLAGS.target_update_frequency == 0 and global_step > FLAGS.iteration:
+                    if FLAGS.use_target_model and q_iteration % FLAGS.target_update_frequency == 0 and global_step > start_step:
                         agent.clone_target_model()
 
                     # provide feedback about iteration, elapsed time, current performance
-                    if q_iteration % FLAGS.checkpoint_frequency == 0 and global_step > FLAGS.iteration:
+                    if q_iteration % FLAGS.checkpoint_frequency == 0 and global_step > start_step:
                         score, _ = evaluate_model(evaluation_controller, agent)  # play evaluation episodes
                         cur_time = time.time()
                         m, s = divmod(cur_time-start_time, 60)
@@ -193,7 +194,7 @@ def main(argv):
                         # check if score is best so far and update model file(s)
                         is_highest = score > best_score
                         if FLAGS.use_checkpoints:
-                            agent.save_checkpoint(global_step, is_highest)
+                            agent.save_checkpoint(q_iteration, is_highest)
                         if is_highest:
                             best_score = score
                         print("iteration {}, elapsed time: {}, score: {}, best: {}".format(q_iteration, time_str,
@@ -210,11 +211,6 @@ def main(argv):
 
     except KeyboardInterrupt:
         print("\nTraining stopped by user")
-
-    # save final state of model
-    if FLAGS.use_checkpoints:
-        agent.save_checkpoint(global_step)
-        print("Latest checkpoint at iteration {}".format(global_step))
 
     env.close()
     env_test.close()

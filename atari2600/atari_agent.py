@@ -34,7 +34,7 @@ class AtariAgent:
             # load model and parameters
             self.model = keras.models.load_model(self.model_name + '.h5',
                                                  custom_objects={'huber_loss': huber_loss})
-            if self.use_target_model:
+            if FLAGS.use_target_model:
                 self.target_model = keras.models.clone_model(self.model)
                 self.clone_target_model()
             self.load_parameters(self.model_name + '.json')
@@ -92,6 +92,7 @@ class AtariAgent:
         if FLAGS.loss == 'huber':
             self.model.compile(optimizer, loss=huber_loss)
         elif FLAGS.loss == 'mse':
+            print('using mse loss')
             self.model.compile(optimizer, loss='mse')
 
         # set up target model
