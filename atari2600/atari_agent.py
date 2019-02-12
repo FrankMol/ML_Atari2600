@@ -19,6 +19,7 @@ flags.DEFINE_float('learning_rate', 0.00025, "learning rate used by CNN")
 flags.DEFINE_float('gradient_momentum', 0.95, "gradient momentum used by CNN")
 flags.DEFINE_float('sq_gradient_momentum', 0.95, "squared gradient momentum used by CNN")
 flags.DEFINE_float('min_sq_gradient', 0.01, "constant added to squared gradient")
+flags.DEFINE_string('loss', 'huber', 'loss function used by optimizer')
 
 
 class AtariAgent:
@@ -86,8 +87,13 @@ class AtariAgent:
         optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
                                              rho=FLAGS.gradient_momentum,
                                              epsilon=FLAGS.min_sq_gradient)
-        self.model.compile(optimizer, loss=huber_loss)
-        # set up the target model
+        # check loss function and compile model
+        if FLAGS.loss == 'huber':
+            self.model.compile(optimizer, loss=huber_loss)
+        elif FLAGS.loss == 'mse':
+            self.model.compile(optimizer, loss='mse')
+
+        # set up target model
         self.target_model = keras.models.clone_model(self.model)
 
     def get_one_hot(self, targets):

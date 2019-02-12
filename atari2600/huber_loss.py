@@ -1,13 +1,6 @@
 from keras import backend as K
 
 
-# def huber_loss(y, q_value):
-#     error = K.abs(y - q_value)
-#     quadratic_part = K.clip(error, 0.0, 1.0)
-#     linear_part = error - quadratic_part
-#     loss = K.mean(0.5 * K.square(quadratic_part) + linear_part)
-#     return loss
-
 def huber_loss(a, b, in_keras=True):
     error = a - b
     quadratic_term = error * error / 2

@@ -1,7 +1,7 @@
 # Import the gym module
 import gym
 
-# make env before importing tensorflow, otherwise it will not load for some reason
+# make gym environment before importing tensorflow, otherwise it will not load for some reason
 ENV_ID = "BreakoutDeterministic-v4"
 env_train = gym.make(ENV_ID)  # training environment
 env_test = gym.make(ENV_ID)  # evaluation environment
@@ -13,7 +13,7 @@ import time
 import csv
 import random
 import tensorflow as tf
-from replay_memory import ReplayMemory
+from replay_memory_2 import ReplayMemory
 from atari_agent import AtariAgent
 from atari_controller import AtariController
 from tensorflow import flags
@@ -28,10 +28,10 @@ FLAGS = flags.FLAGS
 MODEL_PATH = 'trained_models/'
 os.makedirs(MODEL_PATH, exist_ok=True)
 
-SUMMARIES = "summaries/"          # logdir for tensorboard
-RUNID = sys.argv[1]
-os.makedirs(os.path.join(SUMMARIES, RUNID), exist_ok=True)
-SUMM_WRITER = tf.summary.FileWriter(os.path.join(SUMMARIES, RUNID))
+SUMMARIES = "summaries/"  # logdir for tensorboard
+RUN_ID = sys.argv[1]
+os.makedirs(os.path.join(SUMMARIES, RUN_ID), exist_ok=True)
+SUMM_WRITER = tf.summary.FileWriter(os.path.join(SUMMARIES, RUN_ID))
 
 # tensorboard
 with tf.name_scope('Performance'):
@@ -131,11 +131,10 @@ def main(argv):
     else:
         model_id = default_model_name
 
-
     # instantiate agent, controller, memory
     controller = AtariController(env)
     evaluation_controller = AtariController(env_test)
-    memory = ReplayMemory()
+    memory = ReplayMemory(FLAGS.memory_size)
     agent = AtariAgent(env, model_id)
     sess = tf.Session()
 
@@ -149,7 +148,7 @@ def main(argv):
     print("Initializing replay memory with {} states...".format(FLAGS.memory_start_size))
 
     # start training
-    best_score = -np.inf  # keeps track of best score reached, used for saving best-so-far model
+    best_score = -np.inf  # keep track of best score, used for saving best-so-far model
     try:
         while True:
 
@@ -165,11 +164,11 @@ def main(argv):
 
                 # add current experience to replay memory. both game over and dead are considered terminal states
                 terminal = is_done or life_lost
-                memory.add_experience(action, frame, reward, terminal)
+                memory.add_experience(frame, action, reward, terminal)
 
                 # Sample mini batch from memory and fit model
                 if global_step % FLAGS.update_frequency == 0 and global_step > FLAGS.iteration:
-                    batch = memory.get_minibatch()
+                    batch = memory.get_batch(FLAGS.batch_size)
                     hist = agent.fit_batch(batch)
                     loss_list.append(hist.history['loss'][0])
                     q_iteration += 1
@@ -178,12 +177,13 @@ def main(argv):
                         start_time = time.time()
                         print("Starting training...")
 
+                # update target model
                 if global_step % FLAGS.target_update_frequency == 0 and global_step > FLAGS.iteration:
                     agent.clone_target_model()
 
                 # provide feedback about iteration, elapsed time, current performance
                 if global_step % FLAGS.checkpoint_frequency == 0 and global_step > FLAGS.iteration:
-                    score, _ = evaluate_model(evaluation_controller, agent)  # play evaluation episode to rate performance
+                    score, _ = evaluate_model(evaluation_controller, agent)  # play evaluation episodes
                     cur_time = time.time()
                     m, s = divmod(cur_time-start_time, 60)
                     h, m = divmod(m, 60)
@@ -197,6 +197,7 @@ def main(argv):
                     print("iteration {}, elapsed time: {}, score: {}, best: {}".format(global_step, time_str,
                                                                                        round(score, 2),
                                                                                        round(best_score, 2)))
+                    # write training progress to csv
                     write_logs(model_id, global_step, cur_time-start_time, score)
 
                     # _, gif_frames = evaluate_model(evaluation_controller, agent, epsilon=0, n_episodes=1)
