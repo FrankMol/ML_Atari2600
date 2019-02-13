@@ -29,7 +29,7 @@ class ReplayMemory:
         self.terminal[self.cur_idx] = terminal
 
         # update counter and current index
-        self.cur_idx = self.cur_idx + 1 if self.cur_idx < self.size else 0
+        self.cur_idx = self.cur_idx + 1 if self.cur_idx + 1 < self.size else 0
         self.count = max(self.count, self.cur_idx)
 
     def get_state(self, index):
