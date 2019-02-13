@@ -21,6 +21,8 @@ flags.DEFINE_float('sq_gradient_momentum', 0.95, "squared gradient momentum used
 flags.DEFINE_float('min_sq_gradient', 0.01, "constant added to squared gradient")
 flags.DEFINE_string('loss', 'huber', 'loss function used by optimizer')
 
+def mean(x):
+    return keras.backend.mean(x, axis=1, keepdims=True)
 
 class AtariAgent:
 
@@ -71,7 +73,6 @@ class AtariAgent:
             f.write(json.dumps(items, indent=4))
 
     def build_model(self):
-
         frames_input = keras.layers.Input(ATARI_SHAPE, name='frames')
         actions_input = keras.layers.Input((self.n_actions,), name='mask')
 
@@ -79,8 +80,20 @@ class AtariAgent:
         conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4))(normalized)
         conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2))(conv_1)
         conv_flattened = keras.layers.core.Flatten()(conv_2)
-        hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
-        output = keras.layers.Dense(self.n_actions)(hidden)
+
+        # value_stream = keras.layers.core.Flatten()(conv_2)
+        # advantage_stream = keras.layers.core.Flatten()(conv_2)
+
+        value_hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
+        advantage_hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
+
+        advantage_output = keras.layers.Dense(self.n_actions)(advantage_hidden)
+        value_output = keras.layers.Dense(1)(value_hidden)
+
+        tmp = keras.layers.Lambda(mean)(advantage_output)
+        tmp2 = keras.layers.merge.Subtract()([advantage_output, tmp])
+        output = keras.layers.merge.Add()([value_output, tmp2])
+
         filtered_output = keras.layers.merge.Multiply()([output, actions_input])
 
         self.model = keras.models.Model(inputs=[frames_input, actions_input], outputs=filtered_output)
@@ -98,6 +111,35 @@ class AtariAgent:
         # set up target model
         if FLAGS.use_target_model:
             self.target_model = keras.models.clone_model(self.model)
+
+    # def build_model(self):
+    #
+    #     frames_input = keras.layers.Input(ATARI_SHAPE, name='frames')
+    #     actions_input = keras.layers.Input((self.n_actions,), name='mask')
+    #
+    #     normalized = keras.layers.Lambda(lambda x: x / 255.0)(frames_input)
+    #     conv_1 = keras.layers.Conv2D(16, (8, 8), activation="relu", strides=(4, 4))(normalized)
+    #     conv_2 = keras.layers.Conv2D(32, (4, 4), activation="relu", strides=(2, 2))(conv_1)
+    #     conv_flattened = keras.layers.core.Flatten()(conv_2)
+    #     hidden = keras.layers.Dense(256, activation='relu')(conv_flattened)
+    #     output = keras.layers.Dense(self.n_actions)(hidden)
+    #     filtered_output = keras.layers.merge.Multiply()([output, actions_input])
+    #
+    #     self.model = keras.models.Model(inputs=[frames_input, actions_input], outputs=filtered_output)
+    #
+    #     optimizer = keras.optimizers.RMSprop(lr=FLAGS.learning_rate,
+    #                                          rho=FLAGS.gradient_momentum,
+    #                                          epsilon=FLAGS.min_sq_gradient)
+    #     # check loss function and compile model
+    #     if FLAGS.loss == 'huber':
+    #         self.model.compile(optimizer, loss=huber_loss)
+    #     elif FLAGS.loss == 'mse':
+    #         print('using mse loss')
+    #         self.model.compile(optimizer, loss='mse')
+    #
+    #     # set up target model
+    #     if FLAGS.use_target_model:
+    #         self.target_model = keras.models.clone_model(self.model)
 
     def get_one_hot(self, targets):
         return np.eye(self.n_actions)[np.array(targets).reshape(-1)]
