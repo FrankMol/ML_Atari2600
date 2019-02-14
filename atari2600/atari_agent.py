@@ -6,6 +6,7 @@ import os.path
 import json
 from tensorflow import flags
 from huber_loss import huber_loss
+from keras import backend as K
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -22,7 +23,7 @@ flags.DEFINE_float('min_sq_gradient', 0.01, "constant added to squared gradient"
 flags.DEFINE_string('loss', 'huber', 'loss function used by optimizer')
 
 def mean(x):
-    return keras.backend.mean(x, axis=1, keepdims=True)
+    return K.mean(x, axis=1, keepdims=True)
 
 class AtariAgent:
 

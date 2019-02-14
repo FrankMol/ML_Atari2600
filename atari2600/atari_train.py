@@ -18,7 +18,7 @@ from atari_agent import AtariAgent
 from atari_controller import AtariController
 from tensorflow import flags
 from datetime import datetime
-from gif_maker import convert_tensor_to_gif_summary
+#from gif_maker import convert_tensor_to_gif_summary
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'  # blocks irrelevant tensorflow warning
 
